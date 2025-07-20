@@ -36,7 +36,14 @@ class Tensor:
     def __rsub__(self, other: Self):
         return (-self) + other
 
+    def detach(self):
+        return Tensor(self.data)
+
     def numpy(self):
+        if self.requires_grad:
+            raise RuntimeError(
+                "Can't call numpy() on Tensor that requires grad. Use tensor.detach().numpy() instead."
+            )
         return self.data
 
     def backward(self):
@@ -49,7 +56,7 @@ class Tensor:
             if t.grad is None and t.requires_grad:
                 t.grad = Tensor(np.zeros_like(t.data))
         # update inputs grads
-        if isinstance(self.grad, int|float):
+        if isinstance(self.grad, int | float):
             grads = self.f.backward(self.grad)
         else:
             grads = self.f.backward(self.grad.data)

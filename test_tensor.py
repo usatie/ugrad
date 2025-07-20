@@ -71,8 +71,8 @@ def test_grad():
     tout = ty.sum()
     tout.backward()
 
-    assert np.allclose(ty.detach().numpy(), uy.numpy())
-    assert np.allclose(tout.detach().numpy(), uout.numpy())
+    assert np.allclose(ty.detach().numpy(), uy.detach().numpy())
+    assert np.allclose(tout.detach().numpy(), uout.detach().numpy())
     assert np.allclose(tn.grad.numpy(), un.grad.numpy())
     assert np.allclose(tm.grad.numpy(), um.grad.numpy())
     assert np.allclose(ts.grad.numpy(), us.grad.numpy())
