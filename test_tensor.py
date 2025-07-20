@@ -24,3 +24,8 @@ def test_mul():
     assert np.all(np.array([6, 12, 20]) == c.data)
     assert np.all((a * 2).data == np.array([6, 8, 10]))
     assert np.all((2 * a).data == np.array([6, 8, 10]))
+
+def test_neg():
+    a = Tensor(np.array([1, -2, 3]))
+    b = -a
+    assert np.all(np.array([-1, 2, -3]) == b.data)
