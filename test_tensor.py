@@ -1,5 +1,6 @@
 from ugrad import Tensor
 import numpy as np
+import torch
 
 def test_add():
     a = Tensor(np.array([1, 2, 3]))
@@ -29,3 +30,28 @@ def test_neg():
     a = Tensor(np.array([1, -2, 3]))
     b = -a
     assert np.all(np.array([-1, 2, -3]) == b.data)
+
+def test_matmul():
+    w = np.random.randn(1, 3)
+    x = np.random.randn(3, 3)
+    b = np.random.randn(1, 3)
+
+    uw = Tensor(w)
+    ux = Tensor(x)
+    ub = Tensor(b)
+    uy = uw.matmul(ux) + ub
+
+    tw = torch.tensor(w, requires_grad=True)
+    tx = torch.tensor(x, requires_grad=True)
+    tb = torch.tensor(b, requires_grad=True)
+    ty = tw.matmul(tx) + tb
+    assert np.allclose(uy.numpy(), ty.detach().numpy())
+
+    ty.sum().backward()
+    out = uy.sum()
+    out.grad = 1.0
+    out.backward()
+    assert np.allclose(tx.grad.numpy(), ux.grad)
+    assert np.allclose(tb.grad.numpy(), ub.grad)
+    assert np.allclose(tw.grad.numpy(), uw.grad)
+    
