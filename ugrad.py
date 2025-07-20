@@ -5,13 +5,13 @@ def register(F, name):
     def call(self, *args):
         f = F()  # Create fresh instance for each call
         args = (Tensor(x) if isinstance(x, int|float) else x for x in args)
-        return Tensor(f(self, *args), func=f, requires_grad=f.requires_grad())
+        return Tensor(f(self, *args), f=f, requires_grad=f.requires_grad())
     setattr(Tensor, name, call)
 
 class Tensor:
-    def __init__(self, data, requires_grad=False, func=None):
+    def __init__(self, data, requires_grad=False, f=None):
         self.data = data
-        self.func = func
+        self.f = f
         self.grad = None
         self.requires_grad=requires_grad
         self._backward = lambda x: ()
@@ -39,19 +39,19 @@ class Tensor:
     def backward(self):
         if self.grad is None and self.data.size == 1:
             self.grad = 1.0
-        if self.func is None: return
+        if self.f is None: return
         # Initialize inputs grads
-        for t in self.func.inputs:
+        for t in self.f.inputs:
             if t.grad is None and t.requires_grad:
                 t.grad = np.zeros_like(t.data)
         # update inputs grads
-        grads = self.func.backward(self.grad)
+        grads = self.f.backward(self.grad)
         grads = grads if isinstance(grads, tuple) else (grads, )
-        for t, g in zip(self.func.inputs, grads):
+        for t, g in zip(self.f.inputs, grads):
             if t.requires_grad:
                 t.grad += g
         # recursively backward()
-        for t in self.func.inputs:
+        for t in self.f.inputs:
             t.backward()
 
 class Function:
