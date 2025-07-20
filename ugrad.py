@@ -1,28 +1,31 @@
 from typing import Self
 import numpy as np
 
+
 def register(F, name):
     def call(self, *args):
         f = F()  # Create fresh instance for each call
-        args = (Tensor(x) if isinstance(x, int|float) else x for x in args)
+        args = (Tensor(x) if isinstance(x, int | float) else x for x in args)
         return Tensor(f(self, *args), f=f, requires_grad=f.requires_grad())
+
     setattr(Tensor, name, call)
+
 
 class Tensor:
     def __init__(self, data, requires_grad=False, f=None):
         self.data = data
         self.f = f
         self.grad = None
-        self.requires_grad=requires_grad
+        self.requires_grad = requires_grad
         self._backward = lambda x: ()
 
     def __repr__(self):
         return f"Tensor(data={self.data})"
 
-    def __radd__(self, other: Self|int|float):
+    def __radd__(self, other: Self | int | float):
         return self + other
 
-    def __rmul__(self, other: Self|int|float):
+    def __rmul__(self, other: Self | int | float):
         return self * other
 
     # self - other
@@ -39,20 +42,22 @@ class Tensor:
     def backward(self):
         if self.grad is None and self.data.size == 1:
             self.grad = 1.0
-        if self.f is None: return
+        if self.f is None:
+            return
         # Initialize inputs grads
         for t in self.f.inputs:
             if t.grad is None and t.requires_grad:
                 t.grad = np.zeros_like(t.data)
         # update inputs grads
         grads = self.f.backward(self.grad)
-        grads = grads if isinstance(grads, tuple) else (grads, )
+        grads = grads if isinstance(grads, tuple) else (grads,)
         for t, g in zip(self.f.inputs, grads):
             if t.requires_grad:
                 t.grad += g
         # recursively backward()
         for t in self.f.inputs:
             t.backward()
+
 
 class Function:
     def forward(self, *args, **kwargs):
@@ -68,6 +73,7 @@ class Function:
     def requires_grad(self):
         return any([t.requires_grad for t in self.inputs])
 
+
 class Add(Function):
     def forward(self, x: Tensor, y: Tensor):
         return x.data + y.data
@@ -75,7 +81,9 @@ class Add(Function):
     def backward(self, out_grad: Tensor):
         return out_grad, out_grad
 
-register(Add, '__add__')
+
+register(Add, "__add__")
+
 
 class Neg(Function):
     def forward(self, x: Tensor):
@@ -84,7 +92,9 @@ class Neg(Function):
     def backward(self, out_grad: Tensor):
         return -out_grad
 
-register(Neg, '__neg__')
+
+register(Neg, "__neg__")
+
 
 class Mul(Function):
     def forward(self, x: Tensor, y: Tensor):
@@ -96,7 +106,9 @@ class Mul(Function):
         y_grad = out_grad * x.data
         return x_grad, y_grad
 
-register(Mul, '__mul__')
+
+register(Mul, "__mul__")
+
 
 class Matmul(Function):
     def forward(self, x: Tensor, y: Tensor):
@@ -115,7 +127,9 @@ class Matmul(Function):
         y_grad = x.data.transpose().dot(out_grad)
         return x_grad, y_grad
 
-register(Matmul, 'matmul')
+
+register(Matmul, "matmul")
+
 
 class Sum(Function):
     def forward(self, x):
@@ -124,4 +138,5 @@ class Sum(Function):
     def backward(self, out_grad):
         return out_grad
 
-register(Sum, 'sum')
+
+register(Sum, "sum")
