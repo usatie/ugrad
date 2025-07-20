@@ -96,14 +96,13 @@ class Add(Function):
 
 class Mul(Function):
     def forward(self, x: Tensor, y: Tensor):
-        self.x = x
-        self.y = y
         self.inputs = (x, y)
         return x.data * y.data
 
     def backward(self, out_grad: Tensor):
-        x_grad = out_grad * self.y.data
-        y_grad = out_grad * self.x.data
+        x, y = self.inputs
+        x_grad = out_grad * y.data
+        y_grad = out_grad * x.data
         return x_grad, y_grad
 
 class Matmul(Function):
@@ -111,8 +110,6 @@ class Matmul(Function):
         # x (2, 3)
         # y (3, 4)
         # out (2, 4)
-        self.x = x
-        self.y = y
         self.inputs = (x, y)
         out = x.data.dot(y.data)
         return out
@@ -120,9 +117,10 @@ class Matmul(Function):
     def backward(self, out_grad: Tensor):
         # x (2, 3)
         # y (3, 4)
+        x, y = self.inputs
         # out_grad (2, 4)
-        x_grad = out_grad.dot(self.y.data.transpose())
-        y_grad = self.x.data.transpose().dot(out_grad)
+        x_grad = out_grad.dot(y.data.transpose())
+        y_grad = x.data.transpose().dot(out_grad)
         return x_grad, y_grad
 
 class Sum(Function):
