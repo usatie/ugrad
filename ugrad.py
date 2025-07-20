@@ -33,9 +33,7 @@ class Tensor:
 
     # self - other
     def __sub__(self, other: Self):
-        if (isinstance(other, int|float)):
-            other = Tensor(other)
-        return Tensor(self.data - other.data)
+        return self + (-other)
 
     # other - self
     def __rsub__(self, other: Self):
@@ -43,21 +41,19 @@ class Tensor:
 
     # -self
     def __neg__(self):
-        return Tensor(-self.data)
+        func = Neg()
+        return Tensor(func(self), func=func)
 
     def numpy(self):
         return self.data
 
     def matmul(self, other):
         func = Matmul()
-        data = func(self, other)
-        out = Tensor(data, func=func)
-        return out
+        return Tensor(func(self, other), func=func)
     
     def sum(self):
         func = Sum()
-        out = Tensor(func(self), func=func)
-        return out
+        return Tensor(func(self), func=func)
 
     def backward(self):
         if self.grad is None and self.data.size == 1:
@@ -93,6 +89,14 @@ class Add(Function):
 
     def backward(self, out_grad: Tensor):
         return out_grad, out_grad
+
+class Neg(Function):
+    def forward(self, x: Tensor):
+        self.inputs = (x, )
+        return -x.data
+
+    def backward(self, out_grad: Tensor):
+        return -out_grad
 
 class Mul(Function):
     def forward(self, x: Tensor, y: Tensor):

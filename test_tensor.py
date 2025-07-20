@@ -33,26 +33,37 @@ def test_neg():
 
 def test_matmul():
     w = np.random.randn(1, 3)
+    s = np.random.randn(1, 3)
+    m = np.random.randn(1, 3)
+    n = np.random.randn(1, 3)
+
     x = np.random.randn(3, 3)
     b = np.random.randn(1, 3)
 
     uw = Tensor(w)
+    us, um, un = Tensor(s), Tensor(m), Tensor(n)
     ux = Tensor(x)
     ub = Tensor(b)
-    uwx = uw.matmul(ux)
+    uW = (uw - us) * um + (-un)
+    uwx = uW.matmul(ux)
     uy = uwx + ub
     uout = uy.sum()
     uout.backward()
 
     tw = torch.tensor(w, requires_grad=True)
+    ts, tm, tn = torch.tensor(s, requires_grad=True), torch.tensor(m, requires_grad=True), torch.tensor(n, requires_grad=True)
     tx = torch.tensor(x, requires_grad=True)
     tb = torch.tensor(b, requires_grad=True)
-    ty = tw.matmul(tx) + tb
+    tW = (tw - ts) * tm + (-tn)
+    ty = tW.matmul(tx) + tb
     tout = ty.sum()
     tout.backward()
 
     assert np.allclose(ty.detach().numpy(), uy.numpy())
     assert np.allclose(tout.detach().numpy(), uout.numpy())
+    assert np.allclose(tn.grad.numpy(), un.grad)
+    assert np.allclose(tm.grad.numpy(), um.grad)
+    assert np.allclose(ts.grad.numpy(), us.grad)
     assert np.allclose(tb.grad.numpy(), ub.grad)
     assert np.allclose(tx.grad.numpy(), ux.grad)
     assert np.allclose(tw.grad.numpy(), uw.grad)
