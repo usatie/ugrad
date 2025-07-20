@@ -31,29 +31,36 @@ def test_neg():
     b = -a
     assert np.all(np.array([-1, 2, -3]) == b.data)
 
-def test_matmul():
+def test_grad():
     w = np.random.randn(1, 3)
     s = np.random.randn(1, 3)
     m = np.random.randn(1, 3)
     n = np.random.randn(1, 3)
-
     x = np.random.randn(3, 3)
     b = np.random.randn(1, 3)
 
-    uw = Tensor(w)
-    us, um, un = Tensor(s), Tensor(m), Tensor(n)
-    ux = Tensor(x)
-    ub = Tensor(b)
+    # ugrad
+    uw = Tensor(w, requires_grad=True)
+    us = Tensor(s, requires_grad=True)
+    um = Tensor(m, requires_grad=True)
+    un = Tensor(n, requires_grad=True)
+    ux = Tensor(x, requires_grad=True)
+    ub = Tensor(b, requires_grad=True)
+
     uW = (uw - us) * um + (-un)
     uwx = uW.matmul(ux)
     uy = uwx + ub
     uout = uy.sum()
     uout.backward()
 
+    # pytorch
     tw = torch.tensor(w, requires_grad=True)
-    ts, tm, tn = torch.tensor(s, requires_grad=True), torch.tensor(m, requires_grad=True), torch.tensor(n, requires_grad=True)
+    ts = torch.tensor(s, requires_grad=True)
+    tm = torch.tensor(m, requires_grad=True)
+    tn = torch.tensor(n, requires_grad=True)
     tx = torch.tensor(x, requires_grad=True)
     tb = torch.tensor(b, requires_grad=True)
+
     tW = (tw - ts) * tm + (-tn)
     ty = tW.matmul(tx) + tb
     tout = ty.sum()

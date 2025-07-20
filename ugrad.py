@@ -2,10 +2,11 @@ from typing import Self
 import numpy as np
 
 class Tensor:
-    def __init__(self, data, func=None):
+    def __init__(self, data, requires_grad=True, func=None):
         self.data = data
         self.func = func
         self.grad = None
+        self.requires_grad=requires_grad
         self._backward = lambda x: ()
 
     def __repr__(self):
@@ -15,8 +16,7 @@ class Tensor:
         if (isinstance(other, int|float)):
             other = Tensor(other)
         func = Add()
-        out = Tensor(func(self, other), func=func)
-        return out
+        return Tensor(func(self, other), func=func)
 
     def __radd__(self, other: Self|int|float):
         return self + other
@@ -25,8 +25,7 @@ class Tensor:
         if (isinstance(other, int|float)):
             other = Tensor(other)
         func = Mul()
-        out = Tensor(func(self, other), func=func)
-        return out
+        return Tensor(func(self, other), func=func)
 
     def __rmul__(self, other: Self|int|float):
         return self * other
@@ -61,13 +60,14 @@ class Tensor:
         if self.func is None: return
         # Initialize inputs grads
         for t in self.func.inputs:
-            if t.grad is None:
+            if t.grad is None and t.requires_grad:
                 t.grad = np.zeros_like(t.data)
         # update inputs grads
         grads = self.func.backward(self.grad)
         grads = grads if isinstance(grads, tuple) else (grads, )
         for t, g in zip(self.func.inputs, grads):
-            t.grad += g
+            if t.requires_grad:
+                t.grad += g
         # recursively backward()
         for t in self.func.inputs:
             t.backward()
