@@ -6,16 +6,17 @@ def register(F, name):
     def call(self, *args):
         f = F()  # Create fresh instance for each call
         args = (Tensor(x) if isinstance(x, int | float) else x for x in args)
-        return Tensor(f(self, *args), f=f, requires_grad=f.requires_grad())
+        return Tensor(f(self, *args), f=f, is_leaf=False, requires_grad=f.requires_grad())
 
     setattr(Tensor, name, call)
 
 
 class Tensor:
-    def __init__(self, data, requires_grad=False, f=None):
+    def __init__(self, data, is_leaf=True, requires_grad=False, f=None):
         self.data = data
         self.f = f
         self.grad = None
+        self.is_leaf = is_leaf
         self.requires_grad = requires_grad
         self._backward = lambda x: ()
 
@@ -36,6 +37,10 @@ class Tensor:
     def __rsub__(self, other: Self):
         return (-self) + other
 
+    @property
+    def shape(self):
+        return self.data.shape
+
     def detach(self):
         return Tensor(self.data)
 
@@ -46,26 +51,28 @@ class Tensor:
             )
         return self.data
 
-    def backward(self):
-        assert (self.grad is not None or self.data.size == 1)
+    def backward(self, outgrad=None):
+        assert (outgrad is not None or self.data.size == 1)
         if self.f is None:
             return
-        # Initialize inputs grads
-        for t in self.f.inputs:
-            if t.grad is None and t.requires_grad:
-                t.grad = Tensor(np.zeros_like(t.data))
-        # update inputs grads
-        if self.grad is None:
+        # Compute gradients
+        if outgrad is None:
             grads = self.f.backward(1.0)
         else:
-            grads = self.f.backward(self.grad.data)
+            grads = self.f.backward(outgrad)
         grads = grads if isinstance(grads, tuple) else (grads,)
+        # Single loop: initialize, update grads, and recurse
         for t, g in zip(self.f.inputs, grads):
-            if t.requires_grad:
-                t.grad.data += g
-        # recursively backward()
-        for t in self.f.inputs:
-            t.backward()
+            grad = Tensor(np.zeros_like(t.data))
+            grad += Tensor(g)
+            if t.requires_grad and t.is_leaf:
+                # Update gradient
+                if t.grad is None:
+                    t.grad = grad
+                else:
+                    t.grad.data += grad
+            # Recurse
+            t.backward(t.grad.data if t.requires_grad and t.is_leaf else grad.data)
 
 
 class Function:

@@ -51,22 +51,19 @@ def test_grad():
     x = ComparableTensor(np_x, requires_grad=True)
     b = ComparableTensor(np_b, requires_grad=True)
 
-    W = w.__sub__(s)
     W = (w - s) * m + (-n)
     wx = W.matmul(x)
     y = wx + b
     out = y.sum()
     out.backward()
 
-    w.assert_grad_equal()
-    s.assert_grad_equal()
-    m.assert_grad_equal()
-    n.assert_grad_equal()
-    x.assert_grad_equal()
-    b.assert_grad_equal()
-
-    y.assert_data_equal()
-    out.assert_data_equal()
-    print(w)
-    print(out)
-
+    w.assert_all()
+    s.assert_all()
+    m.assert_all()
+    n.assert_all()
+    x.assert_all()
+    b.assert_all()
+    W.assert_all()
+    wx.assert_all()
+    y.assert_all()
+    out.assert_all()
