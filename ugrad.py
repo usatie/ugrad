@@ -47,8 +47,7 @@ class Tensor:
         return self.data
 
     def backward(self):
-        if self.grad is None and self.data.size == 1:
-            self.grad = 1.0
+        assert (self.grad is not None or self.data.size == 1)
         if self.f is None:
             return
         # Initialize inputs grads
@@ -56,8 +55,8 @@ class Tensor:
             if t.grad is None and t.requires_grad:
                 t.grad = Tensor(np.zeros_like(t.data))
         # update inputs grads
-        if isinstance(self.grad, int | float):
-            grads = self.f.backward(self.grad)
+        if self.grad is None:
+            grads = self.f.backward(1.0)
         else:
             grads = self.f.backward(self.grad.data)
         grads = grads if isinstance(grads, tuple) else (grads,)

@@ -1,6 +1,6 @@
 from ugrad import Tensor
 import numpy as np
-import torch
+from helper import ComparableTensor
 
 
 def test_add():
@@ -36,46 +36,37 @@ def test_neg():
     assert np.all(np.array([-1, 2, -3]) == b.data)
 
 
+np_w = np.random.randn(1, 3)
+np_s = np.random.randn(1, 3)
+np_m = np.random.randn(1, 3)
+np_n = np.random.randn(1, 3)
+np_x = np.random.randn(3, 3)
+np_b = np.random.randn(1, 3)
+
 def test_grad():
-    w = np.random.randn(1, 3)
-    s = np.random.randn(1, 3)
-    m = np.random.randn(1, 3)
-    n = np.random.randn(1, 3)
-    x = np.random.randn(3, 3)
-    b = np.random.randn(1, 3)
+    w = ComparableTensor(np_w, requires_grad=True)
+    s = ComparableTensor(np_s, requires_grad=True)
+    m = ComparableTensor(np_m, requires_grad=True)
+    n = ComparableTensor(np_n, requires_grad=True)
+    x = ComparableTensor(np_x, requires_grad=True)
+    b = ComparableTensor(np_b, requires_grad=True)
 
-    # ugrad
-    uw = Tensor(w, requires_grad=True)
-    us = Tensor(s, requires_grad=True)
-    um = Tensor(m, requires_grad=True)
-    un = Tensor(n, requires_grad=True)
-    ux = Tensor(x, requires_grad=True)
-    ub = Tensor(b, requires_grad=True)
+    W = w.__sub__(s)
+    W = (w - s) * m + (-n)
+    wx = W.matmul(x)
+    y = wx + b
+    out = y.sum()
+    out.backward()
 
-    uW = (uw - us) * um + (-un)
-    uwx = uW.matmul(ux)
-    uy = uwx + ub
-    uout = uy.sum()
-    uout.backward()
+    w.assert_grad_equal()
+    s.assert_grad_equal()
+    m.assert_grad_equal()
+    n.assert_grad_equal()
+    x.assert_grad_equal()
+    b.assert_grad_equal()
 
-    # pytorch
-    tw = torch.tensor(w, requires_grad=True)
-    ts = torch.tensor(s, requires_grad=True)
-    tm = torch.tensor(m, requires_grad=True)
-    tn = torch.tensor(n, requires_grad=True)
-    tx = torch.tensor(x, requires_grad=True)
-    tb = torch.tensor(b, requires_grad=True)
+    y.assert_data_equal()
+    out.assert_data_equal()
+    print(w)
+    print(out)
 
-    tW = (tw - ts) * tm + (-tn)
-    ty = tW.matmul(tx) + tb
-    tout = ty.sum()
-    tout.backward()
-
-    assert np.allclose(ty.detach().numpy(), uy.detach().numpy())
-    assert np.allclose(tout.detach().numpy(), uout.detach().numpy())
-    assert np.allclose(tn.grad.numpy(), un.grad.numpy())
-    assert np.allclose(tm.grad.numpy(), um.grad.numpy())
-    assert np.allclose(ts.grad.numpy(), us.grad.numpy())
-    assert np.allclose(tb.grad.numpy(), ub.grad.numpy())
-    assert np.allclose(tx.grad.numpy(), ux.grad.numpy())
-    assert np.allclose(tw.grad.numpy(), uw.grad.numpy())
