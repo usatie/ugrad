@@ -43,6 +43,7 @@ np_n = np.random.randn(1, 3)
 np_x = np.random.randn(3, 3)
 np_b = np.random.randn(1, 3)
 
+
 def test_grad():
     w = ComparableTensor(np_w, requires_grad=True)
     s = ComparableTensor(np_s, requires_grad=True)

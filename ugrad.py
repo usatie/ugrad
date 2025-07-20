@@ -6,7 +6,9 @@ def register(F, name):
     def call(self, *args):
         f = F()  # Create fresh instance for each call
         args = (Tensor(x) if isinstance(x, int | float) else x for x in args)
-        return Tensor(f(self, *args), f=f, is_leaf=False, requires_grad=f.requires_grad())
+        return Tensor(
+            f(self, *args), f=f, is_leaf=False, requires_grad=f.requires_grad()
+        )
 
     setattr(Tensor, name, call)
 
@@ -52,7 +54,7 @@ class Tensor:
         return self.data
 
     def backward(self, outgrad=None):
-        assert (outgrad is not None or self.data.size == 1)
+        assert outgrad is not None or self.data.size == 1
         if self.f is None:
             return
         # Compute gradients
