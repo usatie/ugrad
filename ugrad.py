@@ -47,13 +47,16 @@ class Tensor:
         # Initialize inputs grads
         for t in self.f.inputs:
             if t.grad is None and t.requires_grad:
-                t.grad = np.zeros_like(t.data)
+                t.grad = Tensor(np.zeros_like(t.data))
         # update inputs grads
-        grads = self.f.backward(self.grad)
+        if isinstance(self.grad, int|float):
+            grads = self.f.backward(self.grad)
+        else:
+            grads = self.f.backward(self.grad.data)
         grads = grads if isinstance(grads, tuple) else (grads,)
         for t, g in zip(self.f.inputs, grads):
             if t.requires_grad:
-                t.grad += g
+                t.grad.data += g
         # recursively backward()
         for t in self.f.inputs:
             t.backward()
