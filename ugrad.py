@@ -2,7 +2,7 @@ from typing import Self
 import numpy as np
 
 class Tensor:
-    def __init__(self, data, requires_grad=True, func=None):
+    def __init__(self, data, requires_grad=False, func=None):
         self.data = data
         self.func = func
         self.grad = None
@@ -16,7 +16,7 @@ class Tensor:
         if (isinstance(other, int|float)):
             other = Tensor(other)
         func = Add()
-        return Tensor(func(self, other), func=func)
+        return Tensor(func(self, other), func=func, requires_grad=func.requires_grad())
 
     def __radd__(self, other: Self|int|float):
         return self + other
@@ -25,7 +25,7 @@ class Tensor:
         if (isinstance(other, int|float)):
             other = Tensor(other)
         func = Mul()
-        return Tensor(func(self, other), func=func)
+        return Tensor(func(self, other), func=func, requires_grad=func.requires_grad())
 
     def __rmul__(self, other: Self|int|float):
         return self * other
@@ -41,18 +41,18 @@ class Tensor:
     # -self
     def __neg__(self):
         func = Neg()
-        return Tensor(func(self), func=func)
+        return Tensor(func(self), func=func, requires_grad=func.requires_grad())
 
     def numpy(self):
         return self.data
 
     def matmul(self, other):
         func = Matmul()
-        return Tensor(func(self, other), func=func)
+        return Tensor(func(self, other), func=func, requires_grad=func.requires_grad())
     
     def sum(self):
         func = Sum()
-        return Tensor(func(self), func=func)
+        return Tensor(func(self), func=func, requires_grad=func.requires_grad())
 
     def backward(self):
         if self.grad is None and self.data.size == 1:
@@ -80,11 +80,14 @@ class Function:
         raise NotImplementedError(f"backward not implemented for {type(self)}")
 
     def __call__(self, *args, **kwargs):
+        self.inputs = args
         return self.forward(*args, **kwargs)
+
+    def requires_grad(self):
+        return any([t.requires_grad for t in self.inputs])
 
 class Add(Function):
     def forward(self, x: Tensor, y: Tensor):
-        self.inputs = (x, y)
         return x.data + y.data
 
     def backward(self, out_grad: Tensor):
@@ -92,7 +95,6 @@ class Add(Function):
 
 class Neg(Function):
     def forward(self, x: Tensor):
-        self.inputs = (x, )
         return -x.data
 
     def backward(self, out_grad: Tensor):
@@ -100,7 +102,6 @@ class Neg(Function):
 
 class Mul(Function):
     def forward(self, x: Tensor, y: Tensor):
-        self.inputs = (x, y)
         return x.data * y.data
 
     def backward(self, out_grad: Tensor):
@@ -114,7 +115,6 @@ class Matmul(Function):
         # x (2, 3)
         # y (3, 4)
         # out (2, 4)
-        self.inputs = (x, y)
         out = x.data.dot(y.data)
         return out
 
@@ -129,7 +129,6 @@ class Matmul(Function):
 
 class Sum(Function):
     def forward(self, x):
-        self.inputs = (x, )
         return x.data.sum()
 
     def backward(self, out_grad):
