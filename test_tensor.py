@@ -39,19 +39,21 @@ def test_matmul():
     uw = Tensor(w)
     ux = Tensor(x)
     ub = Tensor(b)
-    uy = uw.matmul(ux) + ub
+    uwx = uw.matmul(ux)
+    uy = uwx + ub
+    uout = uy.sum()
+    uout.backward()
 
     tw = torch.tensor(w, requires_grad=True)
     tx = torch.tensor(x, requires_grad=True)
     tb = torch.tensor(b, requires_grad=True)
     ty = tw.matmul(tx) + tb
-    assert np.allclose(uy.numpy(), ty.detach().numpy())
+    tout = ty.sum()
+    tout.backward()
 
-    ty.sum().backward()
-    out = uy.sum()
-    out.grad = 1.0
-    out.backward()
-    assert np.allclose(tx.grad.numpy(), ux.grad)
+    assert np.allclose(ty.detach().numpy(), uy.numpy())
+    assert np.allclose(tout.detach().numpy(), uout.numpy())
     assert np.allclose(tb.grad.numpy(), ub.grad)
+    assert np.allclose(tx.grad.numpy(), ux.grad)
     assert np.allclose(tw.grad.numpy(), uw.grad)
     
