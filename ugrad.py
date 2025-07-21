@@ -46,6 +46,10 @@ class Tensor:
     def __rsub__(self, other: Self | int | float) -> "Tensor":
         return (-self) + other
 
+    # self ** n
+    def __pow__(self, n: int) -> "Tensor":
+        return Pow.call(self, n)
+
     @property
     def shape(self) -> tuple[int, ...]:
         return self.data.shape
@@ -73,6 +77,7 @@ class Tensor:
         return ReLU.call(self)
 
     def backward(self, outgrad: Optional["Tensor"] = None) -> None:
+        # print(f"[backward] self: {self.shape} ({self.data.dtype}), outgrad: {outgrad.shape if outgrad is not None else None} ({outgrad.data.dtype if outgrad is not None else None}), f: {self.f}")
         assert outgrad is not None or self.data.size == 1
         if self.f is None:
             return
@@ -84,7 +89,9 @@ class Tensor:
         grads = grads if isinstance(grads, tuple) else (grads,)
         # Single loop: initialize, update grads, and recurse
         for t, g in zip(self.f.inputs, grads):
-            grad = Tensor(np.zeros_like(t.data))
+            grad = Tensor(np.zeros_like(t.data, dtype=np.float64))
+            if grad.data.shape != g.data.shape:
+                g = unbroadcast(g, t.data.shape)
             grad += g
             if t.requires_grad and t.is_leaf:
                 # Update gradient
@@ -94,6 +101,19 @@ class Tensor:
                     t.grad.data += grad.data
             # Recurse
             t.backward(t.grad if t.requires_grad and t.is_leaf else grad)
+
+
+# orig [1]            (, 1)
+# x    [[1,1],[1,1]]  (2, 2)
+def unbroadcast(x, shape):
+    # Assume x is broadcasted from original shape
+    x = x.data.copy()
+    new_x = np.zeros_like(shape, dtype=np.float64)
+    for i, dim in enumerate(reversed(x.shape)):
+        orig_dim = shape[-i - 1] if i < len(shape) else 1
+        if dim != orig_dim:
+            x = x.sum(len(x.shape) - i - 1)
+    return Tensor(x.reshape(shape))
 
 
 class Function:
@@ -170,12 +190,27 @@ class Matmul(Function):
         return x_grad, y_grad
 
 
+class Pow(Function):
+    def forward(self, x: "Tensor", n: int) -> NDArray[np.floating]:
+        return x.data**n.data
+
+    # x^n -> n * x^(n-1)
+    def backward(self, out_grad: "Tensor") -> "Tensor":
+        x, n = self.inputs
+        x, n = x.data, n.data
+        x_grad = Tensor((n * (x ** (n - 1))) * out_grad.data)
+        return x_grad
+
+
 class Sum(Function):
     def forward(self, x: "Tensor") -> NDArray[np.floating] | int | float:
         return x.data.sum()
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
-        return out_grad
+        assert out_grad.data.size == 1
+        (x,) = self.inputs
+        out = Tensor(np.ones_like(x.data, dtype=np.float64) * out_grad.data)
+        return out
 
 
 class Transpose(Function):
@@ -185,6 +220,7 @@ class Transpose(Function):
     def backward(self, out_grad: "Tensor") -> "Tensor":
         return Tensor(out_grad.data.T)
 
+
 class ReLU(Function):
     def forward(self, x: "Tensor") -> NDArray[np.floating]:
         out = x.data.copy()
@@ -192,11 +228,11 @@ class ReLU(Function):
         return out
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
-        (x, ) = self.inputs
+        (x,) = self.inputs
         grad = out_grad.data.copy()
         grad[x.data < 0] = 0
         return Tensor(grad)
-        
+
 
 """
 class ReLU(Function):

@@ -52,10 +52,14 @@ def test_t():
 
 
 def test_relu():
-    a = ComparableTensor(np.arange(0,6, dtype=np.double).reshape(2,3), requires_grad=True)
-    b = ComparableTensor(np.arange(-4, 2, dtype=np.double).reshape(3, 2), requires_grad=True)
+    a = ComparableTensor(
+        np.arange(0, 6, dtype=np.double).reshape(2, 3), requires_grad=True
+    )
+    b = ComparableTensor(
+        np.arange(-4, 2, dtype=np.double).reshape(3, 2), requires_grad=True
+    )
     c = a.matmul(b).relu()
-    d = ComparableTensor(np.random.randn(2,1), requires_grad=True)
+    d = ComparableTensor(np.random.randn(2, 1), requires_grad=True)
     e = c.matmul(d).relu()
     f = e.sum()
     f.backward()
@@ -100,3 +104,42 @@ def test_grad():
     wx.assert_all()
     y.assert_all()
     out.assert_all()
+
+
+class LinearLayer:
+    def __init__(self, size_in, size_out):
+        self.W = ComparableTensor(
+            np.random.randn(size_out, size_in), requires_grad=True
+        )
+        self.b = ComparableTensor(np.random.randn(size_out), requires_grad=True)
+
+    # x : (bs, size_in)
+    # out : (bs, size_out)
+    def __call__(self, x):
+        z = x.matmul(self.W.t()) + self.b
+        return z.relu()
+
+
+def test_mlp():
+    x = ComparableTensor(np.random.randn(32, 2))
+    np_y = np.random.randint(0, 2, 32).reshape(32, 1)
+    y = ComparableTensor(np_y)
+    l1 = LinearLayer(2, 4)
+    l2 = LinearLayer(4, 8)
+    l3 = LinearLayer(8, 1)
+    out = l3(l2(l1(x)))
+    mse = (y - out) ** 2
+    loss = mse.sum()
+
+    loss.backward()
+    loss.assert_all()
+    mse.assert_all()
+    out.assert_all()
+    l3.W.assert_all()
+    l3.b.assert_all()
+    l2.W.assert_all()
+    l2.b.assert_all()
+    l1.W.assert_all()
+    l1.b.assert_all()
+    y.assert_all()
+    x.assert_all()
