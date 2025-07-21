@@ -18,6 +18,14 @@ class ComparableTensor:
         self.a = torch.tensor(*args, **kwargs)
         self.b = ugrad.Tensor(*args, **kwargs)
 
+    @property
+    def torch(self):
+        return self.a
+
+    @property
+    def ugrad(self):
+        return self.b
+
     def __getattr__(self, name):
         def method_forwarder(*args, **kwargs):
             a_args = []

@@ -12,7 +12,9 @@ class Tensor:
         requires_grad: bool = False,
         f: Optional["Function"] = None,
     ):
-        self.data = np.array(data, dtype=np.float64) if isinstance(data, (int, float)) else data
+        self.data = (
+            np.array(data, dtype=np.float64) if isinstance(data, (int, float)) else data
+        )
         self.f = f
         self.grad: Optional[Tensor] = None
         self.is_leaf = is_leaf
@@ -64,6 +66,9 @@ class Tensor:
     def sum(self) -> "Tensor":
         return Sum.call(self)
 
+    def t(self) -> "Tensor":
+        return Transpose.call(self)
+
     def backward(self, outgrad: Optional["Tensor"] = None) -> None:
         assert outgrad is not None or self.data.size == 1
         if self.f is None:
@@ -89,13 +94,19 @@ class Tensor:
 
 
 class Function:
-    def forward(self, *args: "Tensor", **kwargs: Any) -> NDArray[np.floating] | int | float:
+    def forward(
+        self, *args: "Tensor", **kwargs: Any
+    ) -> NDArray[np.floating] | int | float:
         raise NotImplementedError(f"forward not implemented for {type(self)}")
 
-    def backward(self, *args: "Tensor", **kwargs: Any) -> "Tensor" | tuple["Tensor", ...]:
+    def backward(
+        self, *args: "Tensor", **kwargs: Any
+    ) -> "Tensor" | tuple["Tensor", ...]:
         raise NotImplementedError(f"backward not implemented for {type(self)}")
 
-    def __call__(self, *args: "Tensor", **kwargs: Any) -> NDArray[np.floating] | int | float:
+    def __call__(
+        self, *args: "Tensor", **kwargs: Any
+    ) -> NDArray[np.floating] | int | float:
         self.inputs = args
         return self.forward(*args, **kwargs)
 
@@ -162,6 +173,14 @@ class Sum(Function):
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         return out_grad
+
+
+class Transpose(Function):
+    def forward(self, x: "Tensor") -> NDArray[np.floating]:
+        return x.data.transpose()
+
+    def backward(self, out_grad: "Tensor") -> "Tensor":
+        return Tensor(out_grad.data.T)
 
 
 """

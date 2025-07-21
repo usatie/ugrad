@@ -36,6 +36,21 @@ def test_neg():
     assert np.all(np.array([-1, 2, -3]) == b.data)
 
 
+def test_t():
+    a = ComparableTensor(
+        np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32), requires_grad=True
+    )
+    b = a.t()
+    assert np.all(b.ugrad.data == np.array([[1, 4], [2, 5], [3, 6]], dtype=np.float32))
+    c = b * 2
+    loss = c.sum()
+    loss.backward()
+
+    a.assert_all()
+    b.assert_all()
+    c.assert_all()
+
+
 np_w = np.random.randn(1, 3)
 np_s = np.random.randn(1, 3)
 np_m = np.random.randn(1, 3)
