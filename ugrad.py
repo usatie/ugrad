@@ -59,14 +59,14 @@ class Tensor:
             return
         # Compute gradients
         if outgrad is None:
-            grads = self.f.backward(1.0)
+            grads = self.f.backward(Tensor(1.0))
         else:
             grads = self.f.backward(outgrad)
         grads = grads if isinstance(grads, tuple) else (grads,)
         # Single loop: initialize, update grads, and recurse
         for t, g in zip(self.f.inputs, grads):
             grad = Tensor(np.zeros_like(t.data))
-            grad += Tensor(g)
+            grad += g
             if t.requires_grad and t.is_leaf:
                 # Update gradient
                 if t.grad is None:
@@ -74,7 +74,7 @@ class Tensor:
                 else:
                     t.grad.data += grad
             # Recurse
-            t.backward(t.grad.data if t.requires_grad and t.is_leaf else grad.data)
+            t.backward(t.grad if t.requires_grad and t.is_leaf else grad)
 
 
 class Function:
@@ -84,11 +84,11 @@ class Function:
     def backward(self, *args, **kwargs):
         raise NotImplementedError(f"backward not implemented for {type(self)}")
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> Tensor:
         self.inputs = args
         return self.forward(*args, **kwargs)
 
-    def requires_grad(self):
+    def requires_grad(self) -> bool:
         return any([t.requires_grad for t in self.inputs])
 
 
@@ -120,8 +120,8 @@ class Mul(Function):
 
     def backward(self, out_grad: Tensor):
         x, y = self.inputs
-        x_grad = out_grad * y.data
-        y_grad = out_grad * x.data
+        x_grad = Tensor(out_grad.data * y.data)
+        y_grad = Tensor(out_grad.data * x.data)
         return x_grad, y_grad
 
 
@@ -141,8 +141,8 @@ class Matmul(Function):
         # y (3, 4)
         x, y = self.inputs
         # out_grad (2, 4)
-        x_grad = out_grad.dot(y.data.transpose())
-        y_grad = x.data.transpose().dot(out_grad)
+        x_grad = Tensor(out_grad.data.dot(y.data.transpose()))
+        y_grad = Tensor(x.data.transpose().dot(out_grad.data))
         return x_grad, y_grad
 
 
@@ -158,3 +158,14 @@ class Sum(Function):
 
 
 register(Sum, "sum")
+
+"""
+class ReLU(Function):
+    def forward(self):
+        out = x.data
+        out[out.data < 0] = 0
+        return out
+    
+    def backward(self, out_grad):
+        grad = out_grad
+"""
