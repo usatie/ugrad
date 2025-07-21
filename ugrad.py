@@ -17,7 +17,6 @@ class Tensor:
         self.grad: Optional[Tensor] = None
         self.is_leaf = is_leaf
         self.requires_grad = requires_grad
-        self._backward = lambda x: ()
 
     def __repr__(self) -> str:
         return f"Tensor(data={self.data})"
@@ -111,6 +110,7 @@ class Function:
         return Tensor(result, f=f, is_leaf=False, requires_grad=f.requires_grad())
 
 
+# mypy: disable-error-code="override"
 class Add(Function):
     def forward(self, x: "Tensor", y: "Tensor") -> NDArray[np.floating] | int | float:
         return x.data + y.data
