@@ -51,6 +51,23 @@ def test_t():
     c.assert_all()
 
 
+def test_relu():
+    a = ComparableTensor(np.arange(0,6, dtype=np.double).reshape(2,3), requires_grad=True)
+    b = ComparableTensor(np.arange(-4, 2, dtype=np.double).reshape(3, 2), requires_grad=True)
+    c = a.matmul(b).relu()
+    d = ComparableTensor(np.random.randn(2,1), requires_grad=True)
+    e = c.matmul(d).relu()
+    f = e.sum()
+    f.backward()
+
+    f.assert_all()
+    e.assert_all()
+    d.assert_all()
+    c.assert_all()
+    b.assert_all()
+    a.assert_all()
+
+
 np_w = np.random.randn(1, 3)
 np_s = np.random.randn(1, 3)
 np_m = np.random.randn(1, 3)

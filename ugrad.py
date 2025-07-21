@@ -69,6 +69,9 @@ class Tensor:
     def t(self) -> "Tensor":
         return Transpose.call(self)
 
+    def relu(self) -> "Tensor":
+        return ReLU.call(self)
+
     def backward(self, outgrad: Optional["Tensor"] = None) -> None:
         assert outgrad is not None or self.data.size == 1
         if self.f is None:
@@ -182,6 +185,18 @@ class Transpose(Function):
     def backward(self, out_grad: "Tensor") -> "Tensor":
         return Tensor(out_grad.data.T)
 
+class ReLU(Function):
+    def forward(self, x: "Tensor") -> NDArray[np.floating]:
+        out = x.data.copy()
+        out[out < 0] = 0
+        return out
+
+    def backward(self, out_grad: "Tensor") -> "Tensor":
+        (x, ) = self.inputs
+        grad = out_grad.data.copy()
+        grad[x.data < 0] = 0
+        return Tensor(grad)
+        
 
 """
 class ReLU(Function):
