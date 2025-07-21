@@ -2,17 +2,6 @@ from typing import Self
 import numpy as np
 
 
-def register(F, name):
-    def call(self, *args):
-        f = F()  # Create fresh instance for each call
-        args = (Tensor(x) if isinstance(x, int | float) else x for x in args)
-        return Tensor(
-            f(self, *args), f=f, is_leaf=False, requires_grad=f.requires_grad()
-        )
-
-    setattr(Tensor, name, call)
-
-
 class Tensor:
     def __init__(self, data, is_leaf=True, requires_grad=False, f=None):
         self.data = data
@@ -25,18 +14,27 @@ class Tensor:
     def __repr__(self):
         return f"Tensor(data={self.data})"
 
+    def __add__(self, other: Self | int | float):
+        return Add.call(self, other)
+
     def __radd__(self, other: Self | int | float):
         return self + other
+
+    def __mul__(self, other: Self | int | float):
+        return Mul.call(self, other)
 
     def __rmul__(self, other: Self | int | float):
         return self * other
 
+    def __neg__(self):
+        return Neg.call(self)
+
     # self - other
-    def __sub__(self, other: Self):
+    def __sub__(self, other: Self | int | float):
         return self + (-other)
 
     # other - self
-    def __rsub__(self, other: Self):
+    def __rsub__(self, other: Self | int | float):
         return (-self) + other
 
     @property
@@ -52,6 +50,12 @@ class Tensor:
                 "Can't call numpy() on Tensor that requires grad. Use tensor.detach().numpy() instead."
             )
         return self.data
+
+    def matmul(self, other: Self):
+        return Matmul.call(self, other)
+
+    def sum(self):
+        return Sum.call(self)
 
     def backward(self, outgrad=None):
         assert outgrad is not None or self.data.size == 1
@@ -91,6 +95,12 @@ class Function:
     def requires_grad(self) -> bool:
         return any([t.requires_grad for t in self.inputs])
 
+    @classmethod
+    def call(F, *args: Tensor | int | float):
+        f = F()  # Create fresh instance for each call
+        tensors = (Tensor(x) if isinstance(x, int | float) else x for x in args)
+        return Tensor(f(*tensors), f=f, is_leaf=False, requires_grad=f.requires_grad())
+
 
 class Add(Function):
     def forward(self, x: Tensor, y: Tensor):
@@ -100,18 +110,12 @@ class Add(Function):
         return out_grad, out_grad
 
 
-register(Add, "__add__")
-
-
 class Neg(Function):
     def forward(self, x: Tensor):
         return -x.data
 
     def backward(self, out_grad: Tensor):
         return -out_grad
-
-
-register(Neg, "__neg__")
 
 
 class Mul(Function):
@@ -123,9 +127,6 @@ class Mul(Function):
         x_grad = Tensor(out_grad.data * y.data)
         y_grad = Tensor(out_grad.data * x.data)
         return x_grad, y_grad
-
-
-register(Mul, "__mul__")
 
 
 class Matmul(Function):
@@ -146,9 +147,6 @@ class Matmul(Function):
         return x_grad, y_grad
 
 
-register(Matmul, "matmul")
-
-
 class Sum(Function):
     def forward(self, x):
         return x.data.sum()
@@ -156,8 +154,6 @@ class Sum(Function):
     def backward(self, out_grad):
         return out_grad
 
-
-register(Sum, "sum")
 
 """
 class ReLU(Function):
