@@ -1,4 +1,5 @@
-from typing import Self, Optional
+from __future__ import annotations
+from typing import Self, Optional, Any
 import numpy as np
 from numpy.typing import NDArray
 
@@ -11,60 +12,60 @@ class Tensor:
         requires_grad: bool = False,
         f: Optional["Function"] = None,
     ):
-        self.data = data
+        self.data = np.array(data, dtype=np.float64) if isinstance(data, (int, float)) else data
         self.f = f
-        self.grad = None
+        self.grad: Optional[Tensor] = None
         self.is_leaf = is_leaf
         self.requires_grad = requires_grad
         self._backward = lambda x: ()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Tensor(data={self.data})"
 
-    def __add__(self, other: Self | int | float):
+    def __add__(self, other: Self | int | float) -> "Tensor":
         return Add.call(self, other)
 
-    def __radd__(self, other: Self | int | float):
+    def __radd__(self, other: Self | int | float) -> "Tensor":
         return self + other
 
-    def __mul__(self, other: Self | int | float):
+    def __mul__(self, other: Self | int | float) -> "Tensor":
         return Mul.call(self, other)
 
-    def __rmul__(self, other: Self | int | float):
+    def __rmul__(self, other: Self | int | float) -> "Tensor":
         return self * other
 
-    def __neg__(self):
+    def __neg__(self) -> "Tensor":
         return Neg.call(self)
 
     # self - other
-    def __sub__(self, other: Self | int | float):
+    def __sub__(self, other: Self | int | float) -> "Tensor":
         return self + (-other)
 
     # other - self
-    def __rsub__(self, other: Self | int | float):
+    def __rsub__(self, other: Self | int | float) -> "Tensor":
         return (-self) + other
 
     @property
-    def shape(self):
+    def shape(self) -> tuple[int, ...]:
         return self.data.shape
 
-    def detach(self):
+    def detach(self) -> "Tensor":
         return Tensor(self.data)
 
-    def numpy(self):
+    def numpy(self) -> NDArray[np.floating]:
         if self.requires_grad:
             raise RuntimeError(
                 "Can't call numpy() on Tensor that requires grad. Use tensor.detach().numpy() instead."
             )
         return self.data
 
-    def matmul(self, other: Self):
+    def matmul(self, other: Self) -> "Tensor":
         return Matmul.call(self, other)
 
-    def sum(self):
+    def sum(self) -> "Tensor":
         return Sum.call(self)
 
-    def backward(self, outgrad=None):
+    def backward(self, outgrad: Optional["Tensor"] = None) -> None:
         assert outgrad is not None or self.data.size == 1
         if self.f is None:
             return
@@ -83,19 +84,19 @@ class Tensor:
                 if t.grad is None:
                     t.grad = grad
                 else:
-                    t.grad.data += grad
+                    t.grad.data += grad.data
             # Recurse
             t.backward(t.grad if t.requires_grad and t.is_leaf else grad)
 
 
 class Function:
-    def forward(self, *args, **kwargs):
+    def forward(self, *args: "Tensor", **kwargs: Any) -> NDArray[np.floating] | int | float:
         raise NotImplementedError(f"forward not implemented for {type(self)}")
 
-    def backward(self, *args, **kwargs):
+    def backward(self, *args: "Tensor", **kwargs: Any) -> "Tensor" | tuple["Tensor", ...]:
         raise NotImplementedError(f"backward not implemented for {type(self)}")
 
-    def __call__(self, *args, **kwargs) -> Tensor:
+    def __call__(self, *args: "Tensor", **kwargs: Any) -> NDArray[np.floating] | int | float:
         self.inputs = args
         return self.forward(*args, **kwargs)
 
@@ -103,33 +104,34 @@ class Function:
         return any([t.requires_grad for t in self.inputs])
 
     @classmethod
-    def call(F, *args: Tensor | int | float):
+    def call(F, *args: Tensor | int | float) -> Tensor:
         f = F()  # Create fresh instance for each call
-        tensors = (Tensor(x) if isinstance(x, int | float) else x for x in args)
-        return Tensor(f(*tensors), f=f, is_leaf=False, requires_grad=f.requires_grad())
+        tensors = (Tensor(x) if isinstance(x, (int, float)) else x for x in args)
+        result = f(*tensors)
+        return Tensor(result, f=f, is_leaf=False, requires_grad=f.requires_grad())
 
 
 class Add(Function):
-    def forward(self, x: Tensor, y: Tensor):
+    def forward(self, x: "Tensor", y: "Tensor") -> NDArray[np.floating] | int | float:
         return x.data + y.data
 
-    def backward(self, out_grad: Tensor):
+    def backward(self, out_grad: "Tensor") -> tuple["Tensor", "Tensor"]:
         return out_grad, out_grad
 
 
 class Neg(Function):
-    def forward(self, x: Tensor):
+    def forward(self, x: "Tensor") -> NDArray[np.floating] | int | float:
         return -x.data
 
-    def backward(self, out_grad: Tensor):
+    def backward(self, out_grad: "Tensor") -> "Tensor":
         return -out_grad
 
 
 class Mul(Function):
-    def forward(self, x: Tensor, y: Tensor):
+    def forward(self, x: "Tensor", y: "Tensor") -> NDArray[np.floating] | int | float:
         return x.data * y.data
 
-    def backward(self, out_grad: Tensor):
+    def backward(self, out_grad: "Tensor") -> tuple["Tensor", "Tensor"]:
         x, y = self.inputs
         x_grad = Tensor(out_grad.data * y.data)
         y_grad = Tensor(out_grad.data * x.data)
@@ -137,14 +139,14 @@ class Mul(Function):
 
 
 class Matmul(Function):
-    def forward(self, x: Tensor, y: Tensor):
+    def forward(self, x: "Tensor", y: "Tensor") -> NDArray[np.floating]:
         # x (2, 3)
         # y (3, 4)
         # out (2, 4)
         out = x.data.dot(y.data)
         return out
 
-    def backward(self, out_grad: Tensor):
+    def backward(self, out_grad: "Tensor") -> tuple["Tensor", "Tensor"]:
         # x (2, 3)
         # y (3, 4)
         x, y = self.inputs
@@ -155,10 +157,10 @@ class Matmul(Function):
 
 
 class Sum(Function):
-    def forward(self, x):
+    def forward(self, x: "Tensor") -> NDArray[np.floating] | int | float:
         return x.data.sum()
 
-    def backward(self, out_grad):
+    def backward(self, out_grad: "Tensor") -> "Tensor":
         return out_grad
 
 
