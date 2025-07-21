@@ -1,9 +1,16 @@
-from typing import Self
+from typing import Self, Optional
 import numpy as np
+from numpy.typing import NDArray
 
 
 class Tensor:
-    def __init__(self, data, is_leaf=True, requires_grad=False, f=None):
+    def __init__(
+        self,
+        data: NDArray[np.floating] | int | float,
+        is_leaf: bool = True,
+        requires_grad: bool = False,
+        f: Optional["Function"] = None,
+    ):
         self.data = data
         self.f = f
         self.grad = None
