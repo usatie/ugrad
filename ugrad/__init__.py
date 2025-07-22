@@ -1,1 +1,2 @@
-from ugrad.ugrad import Tensor
+from ugrad.tensor import Tensor
+import ugrad.optim as optim
