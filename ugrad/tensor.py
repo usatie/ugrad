@@ -21,7 +21,7 @@ class Tensor:
         self.requires_grad = requires_grad
 
     def __repr__(self) -> str:
-        return f"Tensor(data={self.data})"
+        return f"Tensor(data={self.data}, grad={self.grad})"
 
     def __add__(self, other: Self | int | float) -> "Tensor":
         return Add.call(self, other)
@@ -63,6 +63,14 @@ class Tensor:
                 "Can't call numpy() on Tensor that requires grad. Use tensor.detach().numpy() instead."
             )
         return self.data
+    
+    @staticmethod
+    def zeros(*shape) -> "Tensor":
+        return Tensor(np.zeros(*shape))
+
+    @staticmethod
+    def zeros_like(a: "Tensor") -> "Tensor":
+        return Tensor(np.zeros_like(a.data))
 
     def matmul(self, other: Self) -> "Tensor":
         return Matmul.call(self, other)
@@ -75,7 +83,7 @@ class Tensor:
 
     def relu(self) -> "Tensor":
         return ReLU.call(self)
-
+    
     def backward(self, outgrad: Optional["Tensor"] = None) -> None:
         # print(f"[backward] self: {self.shape} ({self.data.dtype}), outgrad: {outgrad.shape if outgrad is not None else None} ({outgrad.data.dtype if outgrad is not None else None}), f: {self.f}")
         assert outgrad is not None or self.data.size == 1
