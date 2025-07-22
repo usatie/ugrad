@@ -232,15 +232,3 @@ class ReLU(Function):
         grad = out_grad.data.copy()
         grad[x.data < 0] = 0
         return Tensor(grad)
-
-
-"""
-class ReLU(Function):
-    def forward(self):
-        out = x.data
-        out[out.data < 0] = 0
-        return out
-    
-    def backward(self, out_grad):
-        grad = out_grad
-"""

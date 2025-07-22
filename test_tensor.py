@@ -1,5 +1,6 @@
 from ugrad import Tensor
 import numpy as np
+import torch
 from helper import ComparableTensor
 
 
@@ -107,7 +108,8 @@ def test_grad():
 
 
 class LinearLayer:
-    def __init__(self, size_in, size_out):
+    def __init__(self, size_in, size_out, activation=True):
+        self.activation = activation
         self.W = ComparableTensor(
             np.random.randn(size_out, size_in), requires_grad=True
         )
@@ -117,7 +119,16 @@ class LinearLayer:
     # out : (bs, size_out)
     def __call__(self, x):
         z = x.matmul(self.W.t()) + self.b
-        return z.relu()
+        if self.activation:
+            return z.relu()
+        else:
+            return z
+
+    def zero_grad(self):
+        self.W.torch.grad = None
+        self.b.torch.grad = None
+        self.W.ugrad.grad = None
+        self.b.ugrad.grad = None
 
 
 def test_mlp():
@@ -126,20 +137,41 @@ def test_mlp():
     y = ComparableTensor(np_y)
     l1 = LinearLayer(2, 4)
     l2 = LinearLayer(4, 8)
-    l3 = LinearLayer(8, 1)
-    out = l3(l2(l1(x)))
-    mse = (y - out) ** 2
-    loss = mse.sum()
+    l3 = LinearLayer(8, 1, activation=False)
 
-    loss.backward()
-    loss.assert_all()
-    mse.assert_all()
-    out.assert_all()
-    l3.W.assert_all()
-    l3.b.assert_all()
-    l2.W.assert_all()
-    l2.b.assert_all()
-    l1.W.assert_all()
-    l1.b.assert_all()
-    y.assert_all()
-    x.assert_all()
+    for i in range(1000):
+        l1.zero_grad()
+        l2.zero_grad()
+        l3.zero_grad()
+        out = l3(l2(l1(x)))
+        mse = (y - out) ** 2
+        loss = mse.sum()
+        loss.backward()
+        if i % 10 == 0:
+            # print(f"i = {i}")
+            # print(loss)
+            loss.assert_all()
+            mse.assert_all()
+            out.assert_all()
+            l3.W.assert_all()
+            l3.b.assert_all()
+            l2.W.assert_all()
+            l2.b.assert_all()
+            l1.W.assert_all()
+            l1.b.assert_all()
+            y.assert_all()
+            x.assert_all()
+        # This hack is needed because we don't have torch.no_grad() like context manager yet
+        l1.W.torch.data -= 0.001 * l1.W.torch.grad.data
+        l1.W.ugrad.data -= 0.001 * l1.W.ugrad.grad.data
+        l1.b.torch.data -= 0.001 * l1.b.torch.grad.data
+        l1.b.ugrad.data -= 0.001 * l1.b.ugrad.grad.data
+        l2.W.torch.data -= 0.001 * l2.W.torch.grad.data
+        l2.W.ugrad.data -= 0.001 * l2.W.ugrad.grad.data
+        l2.b.torch.data -= 0.001 * l2.b.torch.grad.data
+        l2.b.ugrad.data -= 0.001 * l2.b.ugrad.grad.data
+        l3.W.torch.data -= 0.001 * l3.W.torch.grad.data
+        l3.W.ugrad.data -= 0.001 * l3.W.ugrad.grad.data
+        l3.b.torch.data -= 0.001 * l3.b.torch.grad.data
+        l3.b.ugrad.data -= 0.001 * l3.b.ugrad.grad.data
+    assert loss.ugrad.data < 10.0

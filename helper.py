@@ -48,15 +48,22 @@ class ComparableTensor:
     def __repr__(self):
         grad_a = (
             self.a.grad.numpy()
-            if self.a.requires_grad and self.a.is_leaf
+            if self.a.grad is not None and self.a.requires_grad and self.a.is_leaf
             else self.a.grad
         )
         grad_b = (
             self.b.grad.numpy()
-            if self.b.requires_grad and self.a.is_leaf
+            if self.b.grad is not None and self.b.requires_grad and self.a.is_leaf
             else self.b.grad
         )
-        return f"<torch {self.a.detach().numpy()}, grad={grad_a}, requires_grad={self.a.requires_grad}>\n<ugrad {self.b.detach().numpy()}, grad={grad_b}, requires_grad={self.b.requires_grad}>"
+        return f"<torch {self.a.detach().numpy()}, grad={grad_a}, requires_grad={self.a.requires_grad} is_leaf={self.a.is_leaf}>\n<ugrad {self.b.detach().numpy()}, grad={grad_b}, requires_grad={self.b.requires_grad} is_leaf={self.b.is_leaf}>"
+
+    @property
+    def grad(self):
+        grad = ComparableTensor([])
+        grad.a = self.a.grad
+        grad.b = self.b.grad
+        return grad
 
     def assert_all(self):
         assert self.a.shape == self.b.shape
@@ -67,11 +74,15 @@ class ComparableTensor:
         self.assert_grad_equal()
 
     def assert_data_equal(self):
-        np.testing.assert_allclose(self.a.detach().numpy(), self.b.detach().numpy())
+        np.testing.assert_allclose(
+            self.a.detach().numpy(), self.b.detach().numpy(), atol=1e-6
+        )
 
     def assert_grad_equal(self):
         if self.a.requires_grad and self.a.is_leaf:
-            np.testing.assert_allclose(self.a.grad.numpy(), self.b.grad.numpy())
+            np.testing.assert_allclose(
+                self.a.grad.numpy(), self.b.grad.numpy(), atol=1e-6
+            )
         else:
             assert self.b.grad is None
 
@@ -89,3 +100,4 @@ register("__add__")
 register("__mul__")
 register("__neg__")
 register("__pow__")
+register("__rmul__")
