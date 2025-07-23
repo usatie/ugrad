@@ -65,6 +65,11 @@ class ComparableTensor:
         grad.b = self.b.grad
         return grad
 
+    @property
+    def shape(self):
+        assert self.ugrad.shape == self.torch.shape
+        return self.ugrad.shape
+
     def assert_all(self):
         assert self.a.shape == self.b.shape
         # assert(self.a.dtype == self.b.dtype)
