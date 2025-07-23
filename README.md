@@ -1,6 +1,7 @@
-# ugrad - usatie grad framework
-This is my learning project, inspired by [micrograd](https://github.com/karpathy/micrograd) and [tinygrad](https://github.com/tinygrad/tinygrad).
-Trying to implement a autgrad engine with device backend support from scratch.
+# ugrad - micro(μ) grad framework (or usatie's grad framework)
+This is a toy project for my learning, inspired by [micrograd](https://github.com/karpathy/micrograd) and [tinygrad](https://github.com/tinygrad/tinygrad).
+
+I am trying to implement an autgrad engine with device backend support, something inbetween [micrograd (<150 lines)](https://github.com/karpathy/micrograd) and [teenygrad (<1000 lines)](https://github.com/tinygrad/teenygrad), but much less than [tinygrad (~10000 lines)](https://github.com/tinygrad/tinygrad) and [pytorch (~1,000,000 lines)](https://github.com/pytorch/pytorch)
 
 ## Usage
 How to run unit tests.
