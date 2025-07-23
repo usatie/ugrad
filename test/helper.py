@@ -70,6 +70,11 @@ class ComparableTensor:
         assert self.ugrad.shape == self.torch.shape
         return self.ugrad.shape
 
+    @property
+    def data(self):
+        self.assert_data_equal()
+        return self.ugrad.data
+
     def assert_all(self):
         assert self.a.shape == self.b.shape
         # assert(self.a.dtype == self.b.dtype)
@@ -106,3 +111,21 @@ register("__mul__")
 register("__neg__")
 register("__pow__")
 register("__rmul__")
+
+"""
+ComparableSGD is a wrapper around both PyTorch and ugrad SGD optimizers.
+"""
+
+
+class ComparableSGD:
+    def __init__(self, params, *args, **kwargs):
+        self.a = torch.optim.SGD([p.torch for p in params], *args, **kwargs)
+        self.b = ugrad.optim.SGD([p.ugrad for p in params], *args, **kwargs)
+
+    def zero_grad(self):
+        self.a.zero_grad()
+        self.b.zero_grad()
+
+    def step(self):
+        self.a.step()
+        self.b.step()
