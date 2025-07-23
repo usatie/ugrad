@@ -63,7 +63,7 @@ class Tensor:
                 "Can't call numpy() on Tensor that requires grad. Use tensor.detach().numpy() instead."
             )
         return self.data
-    
+
     @staticmethod
     def zeros(*shape) -> "Tensor":
         return Tensor(np.zeros(*shape))
@@ -83,7 +83,7 @@ class Tensor:
 
     def relu(self) -> "Tensor":
         return ReLU.call(self)
-    
+
     def backward(self, outgrad: Optional["Tensor"] = None) -> None:
         # print(f"[backward] self: {self.shape} ({self.data.dtype}), outgrad: {outgrad.shape if outgrad is not None else None} ({outgrad.data.dtype if outgrad is not None else None}), f: {self.f}")
         assert outgrad is not None or self.data.size == 1

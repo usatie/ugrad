@@ -1,4 +1,3 @@
-from ugrad import Tensor, SGD
 import numpy as np
 import ugrad
 import torch
@@ -21,7 +20,7 @@ class MicroModel:
 class ComparableOptimizer:
     def __init__(self, params, *args, **kwargs):
         self.a = torch.optim.SGD([p.torch for p in params], *args, **kwargs)
-        self.b = ugrad.SGD([p.ugrad for p in params], *args, **kwargs)
+        self.b = ugrad.optim.SGD([p.ugrad for p in params], *args, **kwargs)
 
     def zero_grad(self):
         self.a.zero_grad()

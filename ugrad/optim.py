@@ -1,5 +1,6 @@
 from ugrad import Tensor
 
+
 class SGD:
     def __init__(self, params, lr, momentum):
         self.params = params
@@ -13,5 +14,5 @@ class SGD:
 
     def step(self):
         for p, v in zip(self.params, self.v):
-            v.data = (self.momentum * v.data - self.lr * p.grad.data)
+            v.data = self.momentum * v.data - self.lr * p.grad.data
             p.data += v.data
