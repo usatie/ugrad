@@ -278,4 +278,23 @@ class Conv2D(Function):
         N, cin, inH, inW = x.shape
         x_grad = Tensor.zeros_like(x)
         filters_grad = Tensor.zeros_like(filters)
+        pad = 0
+        stride = 1
+        outH = 1 + (inH - kernel_size + pad * 2) // stride
+        outW = 1 + (inW - kernel_size + pad * 2) // stride
+        # filters_grad[outc, inc, y, x]
+        # outgrad[N, outc, y, x]
+        # x[N, inc, y, x]
+        for j in range(outH):
+            for i in range(outW):
+                # dimension should be ok...
+                # out_grad.transpose().dot(x)
+                for kj in range(kernel_size):
+                    for ki in range(kernel_size):
+                        filters_grad.data[:, :, kj, ki] += out_grad.data[
+                            :, :, j, i
+                        ].T.dot(x.data[:, :, j + kj, i + ki])
+                        x_grad.data[:, :, j + kj, i + ki] += out_grad.data[
+                            :, :, j, i
+                        ].dot(filters.data[:, :, kj, ki])
         return x_grad, filters_grad
