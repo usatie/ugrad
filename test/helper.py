@@ -58,6 +58,11 @@ class ComparableTensor:
         )
         return f"<torch {self.a.detach().numpy()}, grad={grad_a}, requires_grad={self.a.requires_grad} is_leaf={self.a.is_leaf}>\n<ugrad {self.b.detach().numpy()}, grad={grad_b}, requires_grad={self.b.requires_grad} is_leaf={self.b.is_leaf}>"
 
+    def conv2d(self, W: "ComparableTensor") -> "ComparableTensor":
+        torch_out = torch.nn.functional.conv2d(self.torch, W.torch)
+        ugrad_out = self.ugrad.conv2d(W.ugrad)
+        return ComparableTensor(torch_out, ugrad_out)
+
     @property
     def grad(self):
         grad = ComparableTensor([])

@@ -84,6 +84,9 @@ class Tensor:
     def relu(self) -> "Tensor":
         return ReLU.call(self)
 
+    def conv2d(self, filters: "Tensor") -> "Tensor":
+        return Conv2D.call(self, filters)
+
     def backward(self, outgrad: Optional["Tensor"] = None) -> None:
         # print(f"[backward] self: {self.shape} ({self.data.dtype}), outgrad: {outgrad.shape if outgrad is not None else None} ({outgrad.data.dtype if outgrad is not None else None}), f: {self.f}")
         assert outgrad is not None or self.data.size == 1
@@ -240,3 +243,34 @@ class ReLU(Function):
         grad = out_grad.data.copy()
         grad[x.data < 0] = 0
         return Tensor(grad)
+
+
+class Conv2D(Function):
+    """
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int):
+        self.kernels = Tensor(np.randn(out_channels, in_channels, kernel_size, kernel_size))
+    """
+
+    def forward(self, x: "Tensor", filters: "Tensor") -> "Tensor":
+        # https://docs.pytorch.org/docs/stable/generated/torch.nn.Conv2d.html
+        out_channels, in_channels, kernel_size, kernel_size = filters.shape
+        N, cin, inH, inW = x.shape
+        assert cin == in_channels
+        pad = 0
+        stride = 1
+        outH = 1 + (inH - kernel_size + pad * 2) // stride
+        outW = 1 + (inW - kernel_size + pad * 2) // stride
+        out = np.zeros((N, out_channels, outH, outW))
+        for j in range(outH):
+            for i in range(outW):
+                # dimension should be ok...
+                # out[N, outc, y, x] = x[N, inc, y + ky, x + kx].dot(filters[outc, inc, ky, kx].t())
+                for kj in range(kernel_size):
+                    for ki in range(kernel_size):
+                        out[:, :, j, i] += x.data[:, :, j + kj, i + ki].dot(
+                            filters.data[:, :, kj, ki].T
+                        )
+        return out
+
+    def backward(self, out_grad: "Tensor") -> "Tensor":
+        raise NotImplemented("Conv2D.backward")
