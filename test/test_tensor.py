@@ -76,12 +76,16 @@ def test_relu():
 def test_conv2d():
     N, in_channel, out_channel, W, H = 4, 2, 3, 3, 3
     ks = 2
-    x = ComparableTensor(np.random.randn(N, in_channel, W, H), requires_grad=True)
+    x = ComparableTensor(np.random.randn(N, in_channel, W, H))
     filters = ComparableTensor(
         np.random.randn(out_channel, in_channel, ks, ks), requires_grad=True
     )
     out = x.conv2d(filters)
+    m = ComparableTensor(np.random.randn(N, out_channel, W-ks+1, W-ks+1))
+    (out * m).sum().backward()
     out.assert_all()
+    x.assert_all()
+    filters.assert_all()
 
 
 np_w = np.random.randn(1, 3)

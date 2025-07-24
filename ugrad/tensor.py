@@ -273,4 +273,9 @@ class Conv2D(Function):
         return out
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
-        raise NotImplemented("Conv2D.backward")
+        x, filters = self.inputs
+        out_channels, in_channels, kernel_size, kernel_size = filters.shape
+        N, cin, inH, inW = x.shape
+        x_grad = Tensor.zeros_like(x)
+        filters_grad = Tensor.zeros_like(filters)
+        return x_grad, filters_grad
