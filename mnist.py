@@ -24,10 +24,10 @@ def fetch_mnist():
 
 class Linear:
     def __init__(self, in_channel, out_channel, bias=True, activation="relu"):
-        self.W = Tensor(np.random.normal(0,1,(in_channel, out_channel)), requires_grad=True)
-        self.bias = (
-            Tensor(np.zeros(out_channel), requires_grad=True) if bias else None
+        self.W = Tensor(
+            np.random.normal(0, 1, (in_channel, out_channel)), requires_grad=True
         )
+        self.bias = Tensor(np.zeros(out_channel), requires_grad=True) if bias else None
         self.activation = activation
 
     def __call__(self, x):
@@ -76,6 +76,7 @@ def main():
     print(Y_train.shape)
 
     optimizer = SGD(model.parameters(), lr=0.1, momentum=0.9)
+
     def loss_fn(y_pred, y):
         bs = y.shape[0]
         classes = y_pred.shape[-1]
@@ -84,6 +85,7 @@ def main():
         y_gt.data[idx] = 1
         eps = 1e-6
         return (-((eps + y_pred * y_gt).log())).sum() * (1 / bs)
+
     n_epochs = 100000
     batch_size = 32
     idx = np.random.randint(0, len(X_train), batch_size)
