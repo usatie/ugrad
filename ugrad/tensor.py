@@ -264,12 +264,13 @@ class Conv2D(Function):
         for j in range(outH):
             for i in range(outW):
                 # dimension should be ok...
-                # out[N, outc, y, x] = x[N, inc, y + ky, x + kx].dot(filters[outc, inc, ky, kx].t())
-                for kj in range(kernel_size):
-                    for ki in range(kernel_size):
-                        out[:, :, j, i] += x.data[:, :, j + kj, i + ki].dot(
-                            filters.data[:, :, kj, ki].T
-                        )
+                # (N, outc, 1, 1) = (N, inc, ks, ks) ? (outc, inc, ks, ks)
+                # (N, outc, 1, 1) = (N, inc * ks * ks) x (outc, inc * ks * ks).T
+                left = x.data[:, :, j : j + kernel_size, i : i + kernel_size].reshape(
+                    N, -1
+                )
+                right = filters.data.reshape(out_channels, -1)
+                out[:, :, j, i] = left.dot(right.T)
         return out
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
@@ -285,15 +286,26 @@ class Conv2D(Function):
         # filters_grad[outc, inc, y, x]
         # outgrad[N, outc, y, x]
         # x[N, inc, y, x]
+        for kj in range(kernel_size):
+            for ki in range(kernel_size):
+                # 1. filter (outc, inc, ks, ks)
+                # filter(outc, inc, 1, 1) = out(N, outc, outH, outW) ? x(N, inc, outH, outW)
+                # (outc, inc, 1, 1) = (outc, N * outH * outW) x (N * outH * outW, inc)
+                left = out_grad.data.transpose(1, 0, 2, 3).reshape(out_channels, -1)
+                right = x.data.transpose(0, 2, 3, 1)[
+                    :, kj : outH + kj, ki : outW + ki, :
+                ]
+                right = right.reshape(-1, in_channels)
+                filters_grad.data[:, :, kj, ki] += left.dot(right)
+        # 2. x
+        # (N, inc, inH, inW) = (N, outc, outH, outW) ? (outc, inc, ks, ks)
+        # (N, inc, 1, 1) = (N, outc, ks, ks) ? (outc, inc, ks, ks)
         for j in range(outH):
             for i in range(outW):
                 # dimension should be ok...
-                # out_grad.transpose().dot(x)
                 for kj in range(kernel_size):
                     for ki in range(kernel_size):
-                        filters_grad.data[:, :, kj, ki] += out_grad.data[
-                            :, :, j, i
-                        ].T.dot(x.data[:, :, j + kj, i + ki])
+                        # (N, inc, 1, 1) = (N, outc, 1, 1) x (outc, inc, 1, 1)
                         x_grad.data[:, :, j + kj, i + ki] += out_grad.data[
                             :, :, j, i
                         ].dot(filters.data[:, :, kj, ki])
