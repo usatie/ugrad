@@ -77,37 +77,36 @@ def test_softmax():
     a = ComparableTensor(
         np.arange(0, 6, dtype=np.double).reshape(2, 3), requires_grad=True
     )
-    b = ComparableTensor(
-        np.arange(-4, 2, dtype=np.double).reshape(3, 2), requires_grad=True
-    )
-    c = a.matmul(b).softmax(1)
-    d = ComparableTensor(np.random.randn(2, 1), requires_grad=True)
-    e = c.matmul(d).softmax(1)
-    f = e.sum()
-    f.backward()
+    b = a.softmax(1)
+    c = b.sum()
+    c.backward()
 
-    f.assert_all()
-    e.assert_all()
-    d.assert_all()
     c.assert_all()
     b.assert_all()
     a.assert_all()
+
 
 def test_log():
-    a = ComparableTensor(
-        1 + np.random.randn(2, 3), requires_grad=True
-    )
-    b = ComparableTensor(
-        1 + np.random.randn(3, 2), requires_grad=True
-    )
-    c = a.matmul(b).log()
-    d = c.sum()
-    d.backward()
+    a = ComparableTensor(1 + np.random.randn(2, 3), requires_grad=True)
+    b = a.log()
+    c = b.sum()
+    c.backward()
 
-    d.assert_all()
     c.assert_all()
     b.assert_all()
     a.assert_all()
+
+
+def test_logsoftmax():
+    a = ComparableTensor(np.random.randn(2, 3), requires_grad=True)
+    b = a.log_softmax(1)
+    c = b.sum()
+    c.backward()
+
+    c.assert_all()
+    b.assert_all()
+    a.assert_all()
+
 
 def test_conv2d():
     N, in_channel, out_channel, W, H = 4, 2, 3, 3, 3

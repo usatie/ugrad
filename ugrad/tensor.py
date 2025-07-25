@@ -50,6 +50,10 @@ class Tensor:
     def __pow__(self, n: int) -> "Tensor":
         return Pow.call(self, n)
 
+    # self / other
+    def __truediv__(self, other: "Tensor") -> "Tensor":
+        return self * (other**-1)
+
     @property
     def shape(self) -> tuple[int, ...]:
         return self.data.shape
@@ -79,8 +83,8 @@ class Tensor:
     def matmul(self, other: Self) -> "Tensor":
         return Matmul.call(self, other)
 
-    def sum(self) -> "Tensor":
-        return Sum.call(self)
+    def sum(self, dim: Optional[int] = None) -> "Tensor":
+        return Sum.call(self, dim)
 
     def t(self) -> "Tensor":
         return Transpose.call(self)
@@ -88,11 +92,21 @@ class Tensor:
     def relu(self) -> "Tensor":
         return ReLU.call(self)
 
+    def exp(self) -> "Tensor":
+        return Exponential.call(self)
+
     def softmax(self, dim: int) -> "Tensor":
-        return Softmax.call(self, dim)
+        return self.exp() / self.exp().sum(dim).unsqueeze(dim)
 
     def log(self) -> "Tensor":
         return LogN.call(self)
+
+    def unsqueeze(self, dim: int) -> "Tensor":
+        # return Tensor(np.expand_dims(self.data, dim))
+        return Unsqueeze.call(self, dim)
+
+    def log_softmax(self, dim: int) -> "Tensor":
+        return self - self.exp().sum(dim).log().unsqueeze(dim)
 
     def conv2d(self, filters: "Tensor") -> "Tensor":
         return Conv2D.call(self, filters)
@@ -155,7 +169,7 @@ class Function:
         return self.forward(*args, **kwargs)
 
     def requires_grad(self) -> bool:
-        return any([t.requires_grad for t in self.inputs])
+        return any([t and t.requires_grad for t in self.inputs])
 
     @classmethod
     def call(F, *args: Tensor | int | float) -> Tensor:
@@ -224,14 +238,32 @@ class Pow(Function):
 
 
 class Sum(Function):
-    def forward(self, x: "Tensor") -> NDArray[np.floating] | int | float:
-        return x.data.sum()
+    def forward(
+        self, x: "Tensor", dim: Optional[int] = None
+    ) -> NDArray[np.floating] | int | float:
+        if dim is None:
+            return x.data.sum()
+        else:
+            dim = int(dim.data.item())
+            return x.data.sum(dim)
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
-        assert out_grad.data.size == 1
-        (x,) = self.inputs
-        out = Tensor(np.ones_like(x.data, dtype=np.float64) * out_grad.data)
-        return out
+        (x, dim) = self.inputs
+        out = Tensor(np.zeros_like(x.data))
+        if dim is None:
+            return out + out_grad
+        else:
+            return out + out_grad.unsqueeze(dim)
+
+
+class Unsqueeze(Function):
+    def forward(self, x: "Tensor", dim: int) -> NDArray[np.floating]:
+        dim = int(dim.data.item())
+        return np.expand_dims(x.data, dim)
+
+    def backward(self, out_grad: "Tensor") -> "Tensor":
+        (x, dim) = self.inputs
+        return Tensor(out_grad.data.squeeze(int(dim.data.item())))
 
 
 class Transpose(Function):
@@ -254,25 +286,6 @@ class ReLU(Function):
         grad[x.data < 0] = 0
         return Tensor(grad)
 
-class Softmax(Function):
-    def forward(self, x: "Tensor", dim: int) -> NDArray[np.floating]:
-        # x : (bs, n_classes)
-        bs, _ = x.shape
-        out = np.exp(x.data - x.data.max(1).reshape(bs, 1))
-        out /= out.sum(1).reshape(bs, 1)
-        self.out = out
-        return out
-
-    def backward(self, out_grad: "Tensor") -> "Tensor":
-        # y1 = exp(x1) / sum(exp(x1) + ... + exp(xn))
-        # y = z / (z + a) = 1 - a / (z+a)
-        # y' = a / (x+a)**2 * (x+a)'
-        #    = ax / (x+a)(x+a) = (sum-x)x / sum*sum
-        #    = (sum-x)/sum * (x/sum)
-        #    = (1-x/sum) * (x/sum)
-        #    = (1-y) * y
-        y = self.out
-        return Tensor(out_grad.data * (1-y) * y)
 
 class LogN(Function):
     def forward(self, x: "Tensor") -> NDArray[np.floating]:
@@ -283,6 +296,17 @@ class LogN(Function):
         # y' = 1 / x
         (x,) = self.inputs
         return Tensor(out_grad.data / x.data)
+
+
+class Exponential(Function):
+    def forward(self, x: "Tensor") -> NDArray[np.floating]:
+        self.out = np.exp(x.data)
+        return self.out
+
+    def backward(self, out_grad: "Tensor") -> "Tensor":
+        # y = exp(x)
+        # y' = exp(x)
+        return Tensor(out_grad.data * self.out)
 
 
 class Conv2D(Function):
