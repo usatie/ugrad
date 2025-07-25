@@ -54,6 +54,10 @@ class Tensor:
     def shape(self) -> tuple[int, ...]:
         return self.data.shape
 
+    @property
+    def size(self) -> int:
+        return self.data.size
+
     def detach(self) -> "Tensor":
         return Tensor(self.data)
 
@@ -83,6 +87,12 @@ class Tensor:
 
     def relu(self) -> "Tensor":
         return ReLU.call(self)
+
+    def softmax(self, dim: int) -> "Tensor":
+        return Softmax.call(self, dim)
+
+    def log(self) -> "Tensor":
+        return LogN.call(self)
 
     def conv2d(self, filters: "Tensor") -> "Tensor":
         return Conv2D.call(self, filters)
@@ -243,6 +253,36 @@ class ReLU(Function):
         grad = out_grad.data.copy()
         grad[x.data < 0] = 0
         return Tensor(grad)
+
+class Softmax(Function):
+    def forward(self, x: "Tensor", dim: int) -> NDArray[np.floating]:
+        # x : (bs, n_classes)
+        bs, _ = x.shape
+        out = np.exp(x.data - x.data.max(1).reshape(bs, 1))
+        out /= out.sum(1).reshape(bs, 1)
+        self.out = out
+        return out
+
+    def backward(self, out_grad: "Tensor") -> "Tensor":
+        # y1 = exp(x1) / sum(exp(x1) + ... + exp(xn))
+        # y = z / (z + a) = 1 - a / (z+a)
+        # y' = a / (x+a)**2 * (x+a)'
+        #    = ax / (x+a)(x+a) = (sum-x)x / sum*sum
+        #    = (sum-x)/sum * (x/sum)
+        #    = (1-x/sum) * (x/sum)
+        #    = (1-y) * y
+        y = self.out
+        return Tensor(out_grad.data * (1-y) * y)
+
+class LogN(Function):
+    def forward(self, x: "Tensor") -> NDArray[np.floating]:
+        return np.log(x.data)
+
+    def backward(self, out_grad: "Tensor") -> "Tensor":
+        # y = log(x)
+        # y' = 1 / x
+        (x,) = self.inputs
+        return Tensor(out_grad.data / x.data)
 
 
 class Conv2D(Function):
