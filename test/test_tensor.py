@@ -97,7 +97,7 @@ def test_log():
     a.assert_all()
 
 
-def test_logsoftmax():
+def test_log_softmax():
     a = ComparableTensor(np.random.randn(2, 3), requires_grad=True)
     b = a.log_softmax(1)
     c = b.sum()
@@ -106,6 +106,29 @@ def test_logsoftmax():
     c.assert_all()
     b.assert_all()
     a.assert_all()
+
+
+def test_mean():
+    a = ComparableTensor(np.random.randn(2, 3), requires_grad=True)
+    b = a.mean(1)
+    c = b.sum()
+    c.backward()
+
+    c.assert_all()
+    b.assert_all()
+    a.assert_all()
+
+    d = ComparableTensor(np.random.randn(2, 3, 4), requires_grad=True)
+    d.mean().sum().backward()
+    d.assert_all()
+
+    e = ComparableTensor(np.random.randn(2, 3, 4), requires_grad=True)
+    e.mean(0).sum().backward()
+    e.assert_all()
+
+    f = ComparableTensor(np.random.randn(2, 3, 4), requires_grad=True)
+    f.mean(2).sum().backward()
+    f.assert_all()
 
 
 def test_conv2d():

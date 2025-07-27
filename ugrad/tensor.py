@@ -108,6 +108,15 @@ class Tensor:
     def log_softmax(self, dim: int) -> "Tensor":
         return self - self.exp().sum(dim).log().unsqueeze(dim)
 
+    def mean(self, dim: int = None) -> "Tensor":
+        from functools import reduce
+
+        if dim is not None:
+            N = self.shape[dim]
+        else:
+            N = reduce(lambda x, y: x * y, self.shape, 1)
+        return self.sum(dim) / N
+
     def conv2d(self, filters: "Tensor") -> "Tensor":
         return Conv2D.call(self, filters)
 
