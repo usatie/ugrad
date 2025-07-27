@@ -130,6 +130,27 @@ def test_mean():
     f.mean(2).sum().backward()
     f.assert_all()
 
+    x = ComparableTensor(np.random.randn(2, 3, 4), requires_grad=True)
+    x.mean().assert_all()
+    x.mean(0, keepdim=True).assert_all()
+    x.mean(1, keepdim=True).assert_all()
+    x.mean(2, keepdim=True).assert_all()
+    x.mean(0, keepdim=False).assert_all()
+    x.mean(1, keepdim=False).assert_all()
+    x.mean(2, keepdim=False).assert_all()
+
+
+def test_std():
+    a = ComparableTensor(
+        np.arange(0, 24, dtype=np.float64).reshape((2, 12)), requires_grad=True
+    )
+    a.std(1, correction=0).assert_all()
+    a.std(1, correction=1).assert_all()
+    a.std(correction=0).assert_all()
+    a.std(correction=1).assert_all()
+    a.std(1).sum().backward()
+    a.assert_all()
+
 
 def test_conv2d():
     N, in_channel, out_channel, W, H = 4, 2, 3, 3, 3

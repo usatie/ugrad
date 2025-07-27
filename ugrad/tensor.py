@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Self, Optional, Any
 import numpy as np
 from numpy.typing import NDArray
+from math import prod
 
 
 class Tensor:
@@ -83,8 +84,11 @@ class Tensor:
     def matmul(self, other: Self) -> "Tensor":
         return Matmul.call(self, other)
 
-    def sum(self, dim: Optional[int] = None) -> "Tensor":
-        return Sum.call(self, dim)
+    def sum(self, dim: Optional[int] = None, keepdim: bool = False) -> "Tensor":
+        if keepdim and dim is not None:
+            return Sum.call(self, dim).unsqueeze(dim)
+        else:
+            return Sum.call(self, dim)
 
     def t(self) -> "Tensor":
         return Transpose.call(self)
@@ -108,14 +112,23 @@ class Tensor:
     def log_softmax(self, dim: int) -> "Tensor":
         return self - self.exp().sum(dim).log().unsqueeze(dim)
 
-    def mean(self, dim: int = None) -> "Tensor":
-        from functools import reduce
+    def mean(self, dim: Optional[int] = None, keepdim: bool = False) -> "Tensor":
+        out = self.sum(dim, keepdim=keepdim)
+        N = prod(self.shape) / prod(out.shape)
+        return out / N
 
-        if dim is not None:
-            N = self.shape[dim]
-        else:
-            N = reduce(lambda x, y: x * y, self.shape, 1)
-        return self.sum(dim) / N
+    def square(self) -> "Tensor":
+        return self**2
+
+    def sqrt(self) -> "Tensor":
+        return self**0.5
+
+    def std(self, dim: Optional[int] = None, correction=1) -> "Tensor":
+        meanzero = self - self.mean(dim, keepdim=True)
+        sqsum = meanzero.square().sum(dim)
+        N = prod(self.shape) / prod(sqsum.shape)
+        out = sqsum / max(0, N - correction)
+        return out.sqrt()
 
     def conv2d(self, filters: "Tensor") -> "Tensor":
         return Conv2D.call(self, filters)
@@ -153,10 +166,14 @@ def unbroadcast(x, shape):
     # Assume x is broadcasted from original shape
     x = x.data.copy()
     new_x = np.zeros_like(shape, dtype=np.float64)
-    for i, dim in enumerate(reversed(x.shape)):
-        orig_dim = shape[-i - 1] if i < len(shape) else 1
+    i = 1
+    while x.shape != shape and i <= len(x.shape):
+        dim = x.shape[-i]
+        orig_dim = shape[-i] if shape and i <= len(shape) else 1
         if dim != orig_dim:
-            x = x.sum(len(x.shape) - i - 1)
+            x = np.expand_dims(x.sum(-i), -i)
+        else:
+            i += 1
     return Tensor(x.reshape(shape))
 
 
