@@ -108,6 +108,14 @@ def test_log_softmax():
     a.assert_all()
 
 
+def test_square():
+    a = ComparableTensor(np.random.randn(2, 3), requires_grad=True)
+    a.square().assert_all()
+
+def test_sqrt():
+    a = ComparableTensor(np.random.randn(2, 3), requires_grad=True)
+    a.sqrt().assert_all()
+
 def test_mean():
     a = ComparableTensor(np.random.randn(2, 3), requires_grad=True)
     b = a.mean(1)
