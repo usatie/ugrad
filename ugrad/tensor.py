@@ -48,7 +48,7 @@ class Tensor:
         return (-self) + other
 
     # self ** n
-    def __pow__(self, n: int) -> "Tensor":
+    def __pow__(self, n: int | float) -> "Tensor":
         return Pow.call(self, n)
 
     # self / other
@@ -257,13 +257,13 @@ class Matmul(Function):
 
 
 class Pow(Function):
-    def forward(self, x: "Tensor", n: int) -> NDArray[np.floating]:
-        return x.data**n.data
+    def forward(self, x: "Tensor", n: int | float) -> NDArray[np.floating]:
+        return x.data**n
 
     # x^n -> n * x^(n-1)
     def backward(self, out_grad: "Tensor") -> "Tensor":
         x, n = self.inputs
-        x, n = x.data, n.data
+        x = x.data
         x_grad = Tensor((n * (x ** (n - 1))) * out_grad.data)
         return x_grad
 
