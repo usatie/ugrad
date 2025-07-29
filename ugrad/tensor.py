@@ -52,7 +52,7 @@ class Tensor:
         return Pow.call(self, n)
 
     # self / other
-    def __truediv__(self, other: "Tensor") -> "Tensor":
+    def __truediv__(self, other: "Tensor" | int | float) -> "Tensor":
         return self * (other**-1)
 
     @property
@@ -126,7 +126,9 @@ class Tensor:
         y = (x - x.mean()) / x.std()
         return y
 
-    def std(self, dim: Optional[int] = None, correction=1, keepdim=False) -> "Tensor":
+    def std(
+        self, dim: Optional[int] = None, correction: int = 1, keepdim: bool = False
+    ) -> "Tensor":
         meanzero = self - self.mean(dim, keepdim=True)
         sqsum = meanzero.square().sum(dim, keepdim=keepdim)
         N = prod(self.shape) / prod(sqsum.shape)
@@ -167,33 +169,31 @@ class Tensor:
 
 # orig [1]            (, 1)
 # x    [[1,1],[1,1]]  (2, 2)
-def unbroadcast(x, shape):
+def unbroadcast(x: "Tensor", shape: tuple[int, ...]) -> "Tensor":
     # Assume x is broadcasted from original shape
-    x = x.data.copy()
+    out = x.data.copy()
     i = 1
-    while x.shape != shape and i <= len(x.shape):
-        dim = x.shape[-i]
+    while out.shape != shape and i <= len(out.shape):
+        dim = out.shape[-i]
         orig_dim = shape[-i] if shape and i <= len(shape) else 1
         if dim != orig_dim:
-            x = np.expand_dims(x.sum(-i), -i)
+            out = np.expand_dims(out.sum(-i), -i)
         else:
             i += 1
-    return Tensor(x.reshape(shape))
+    return Tensor(out.reshape(shape))
 
 
 class Function:
     def forward(
-        self, *args: "Tensor", **kwargs: Any
+        self, *args: Any, **kwargs: Any
     ) -> NDArray[np.floating] | int | float:
         raise NotImplementedError(f"forward not implemented for {type(self)}")
 
-    def backward(
-        self, *args: "Tensor", **kwargs: Any
-    ) -> "Tensor" | tuple["Tensor", ...]:
+    def backward(self, out_grad: "Tensor") -> "Tensor" | tuple["Tensor", ...]:
         raise NotImplementedError(f"backward not implemented for {type(self)}")
 
     def __call__(
-        self, *args: "Tensor", **kwargs: Any
+        self, *args: Any, **kwargs: Any
     ) -> NDArray[np.floating] | int | float:
         self.inputs = args
         return self.forward(*args, **kwargs)
@@ -202,7 +202,7 @@ class Function:
         return any([isinstance(t, Tensor) and t.requires_grad for t in self.inputs])
 
     @classmethod
-    def call(F, *args: Tensor | int | float) -> Tensor:
+    def call(F, *args: Any) -> Tensor:
         f = F()  # Create fresh instance for each call
         result = f(*args)
         return Tensor(result, f=f, is_leaf=False, requires_grad=f.requires_grad())
@@ -265,8 +265,7 @@ class Pow(Function):
     # x^n -> n * x^(n-1)
     def backward(self, out_grad: "Tensor") -> "Tensor":
         x, n = self.inputs
-        x = x.data
-        x_grad = Tensor((n * (x ** (n - 1))) * out_grad.data)
+        x_grad = Tensor((n * (x.data ** (n - 1))) * out_grad.data)
         return x_grad
 
 
