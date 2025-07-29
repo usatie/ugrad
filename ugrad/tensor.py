@@ -292,12 +292,11 @@ class Sum(Function):
 
 class Unsqueeze(Function):
     def forward(self, x: "Tensor", dim: int) -> NDArray[np.floating]:
-        dim = int(dim.data.item())
         return np.expand_dims(x.data, dim)
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         (x, dim) = self.inputs
-        return Tensor(out_grad.data.squeeze(int(dim.data.item())))
+        return Tensor(out_grad.data.squeeze(dim))
 
 
 class Transpose(Function):
