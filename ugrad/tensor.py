@@ -74,8 +74,8 @@ class Tensor:
         return self.data
 
     @staticmethod
-    def zeros(*shape) -> "Tensor":
-        return Tensor(np.zeros(*shape))
+    def zeros(shape: int | tuple[int], dtype: np.dtype) -> "Tensor":
+        return Tensor(np.zeros(shape, dtype))
 
     @staticmethod
     def zeros_like(a: "Tensor") -> "Tensor":
@@ -349,7 +349,7 @@ class Conv2D(Function):
         self.kernels = Tensor(np.randn(out_channels, in_channels, kernel_size, kernel_size))
     """
 
-    def forward(self, x: "Tensor", filters: "Tensor") -> "Tensor":
+    def forward(self, x: "Tensor", filters: "Tensor") -> NDArray[np.floating]:
         # https://docs.pytorch.org/docs/stable/generated/torch.nn.Conv2d.html
         out_channels, in_channels, kernel_size, kernel_size = filters.shape
         N, cin, inH, inW = x.shape
@@ -371,7 +371,7 @@ class Conv2D(Function):
                 out[:, :, j, i] = left.dot(right.T)
         return out
 
-    def backward(self, out_grad: "Tensor") -> "Tensor":
+    def backward(self, out_grad: "Tensor") -> tuple["Tensor", ...]:
         x, filters = self.inputs
         out_channels, in_channels, kernel_size, kernel_size = filters.shape
         N, cin, inH, inW = x.shape
