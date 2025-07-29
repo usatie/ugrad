@@ -184,17 +184,13 @@ def unbroadcast(x: "Tensor", shape: tuple[int, ...]) -> "Tensor":
 
 
 class Function:
-    def forward(
-        self, *args: Any, **kwargs: Any
-    ) -> NDArray[np.floating] | int | float:
+    def forward(self, *args: Any, **kwargs: Any) -> NDArray[np.floating] | int | float:
         raise NotImplementedError(f"forward not implemented for {type(self)}")
 
     def backward(self, out_grad: "Tensor") -> "Tensor" | tuple["Tensor", ...]:
         raise NotImplementedError(f"backward not implemented for {type(self)}")
 
-    def __call__(
-        self, *args: Any, **kwargs: Any
-    ) -> NDArray[np.floating] | int | float:
+    def __call__(self, *args: Any, **kwargs: Any) -> NDArray[np.floating] | int | float:
         self.inputs = args
         return self.forward(*args, **kwargs)
 
