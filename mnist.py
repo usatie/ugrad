@@ -58,32 +58,44 @@ class MLP:
 
     def __call__(self, x):
         for l in self.layers:
-            x = l(x.batch_norm())
-        x = x.softmax(1)
+            x = l(x).batch_norm()
+        x = x.log_softmax(-1)
         return x
 
     def parameters(self):
         return [p for l in self.layers for p in l.parameters()]
 
+def transform_target(target, n_classes: int):
+    bs = target.shape[0]
+    idx = (range(bs), tuple([x.item() for x in target]))
+    transformed = np.zeros((bs, n_classes))
+    transformed[idx] = 1
+    return transformed
+
+def evaluate(model, X_test, Y_test):
+    y_pred = model(Tensor(X_test))
+    accuracy = (y_pred.data.argmax(-1) == Y_test).sum() / len(X_test)
+    print(f"Accuracy: {accuracy}")
+
 
 def main():
-    model = MLP((784, 10))
+    model = MLP((784, 128, 32, 10))
     X_train, Y_train, X_test, Y_test = fetch_mnist()
 
-    optimizer = SGD(model.parameters(), lr=0.1, momentum=0.9)
+    optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
 
     def loss_fn(y_pred, y):
         bs = y.shape[0]
-        classes = y_pred.shape[-1]
-        idx = (range(bs), tuple([x.item() for x in y.data]))
-        y_gt = Tensor(np.zeros((bs, classes)))
-        y_gt.data[idx] = 1
+        n_classes = y_pred.shape[-1]
+        y_gt = Tensor(transform_target(y.data, n_classes))
         eps = 1e-6
-        return (-((eps + y_pred * y_gt).log())).sum() * (1 / bs)
+        return (y_gt - y_pred).sum() * (1 / bs)
 
-    n_epochs = 1000
+    n_epochs = 100000
     batch_size = 32
     idx = np.random.randint(0, len(X_train), batch_size)
+    print("-----Initial Evaluation-----")
+    evaluate(model, X_test, Y_test)
     for i in range(n_epochs):
         X = X_train[idx]
         Y = Y_train[idx]
@@ -92,11 +104,12 @@ def main():
         optimizer.zero_grad()
         out = model(Tensor(X))
         loss = loss_fn(out, Tensor(Y))
-        if i % 1000 == 0:
+        if i % 100 == 0:
             print(loss.data.item())
+            print("-----Evaluation-----")
+            evaluate(model, X_test, Y_test)
         loss.backward()
         optimizer.step()
-    print(model(Tensor(X_train)).data.shape)
 
 
 if __name__ == "__main__":
