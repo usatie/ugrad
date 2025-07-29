@@ -149,6 +149,14 @@ def test_mean():
     x.mean(1, keepdim=False).assert_all()
     x.mean(2, keepdim=False).assert_all()
 
+def test_sum():
+    a = ComparableTensor(np.random.randn(2, 3, 4), requires_grad=True)
+
+    a.sum().assert_all()
+    a.sum(0).assert_all()
+    a.sum(1).assert_all()
+    a.sum(2).assert_all()
+
 def test_std():
     a = ComparableTensor(
         np.random.nrandom(2,3,4), requires_grad=True

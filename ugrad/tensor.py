@@ -272,18 +272,15 @@ class Sum(Function):
     def forward(
             self, x: "Tensor", dim: Optional[int], keepdim: bool
     ) -> NDArray[np.floating] | int | float:
-        keepdim = bool(keepdim.data.item())
         if dim is None:
             out = x.data.sum(keepdims=keepdim)
             return out
         else:
-            dim = int(dim.data.item())
             return x.data.sum(dim, keepdims=keepdim)
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         (x, dim, keepdim) = self.inputs
         out = Tensor(np.zeros_like(x.data))
-        keepdim = bool(keepdim.data.item())
         if dim is not None:
             if not keepdim:
                 return out + out_grad.unsqueeze(dim) # let numpy broadcast
