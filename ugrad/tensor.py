@@ -197,20 +197,19 @@ class Function:
         return self.forward(*args, **kwargs)
 
     def requires_grad(self) -> bool:
-        return any([t and t.requires_grad for t in self.inputs])
+        return any([isinstance(t, Tensor) and t.requires_grad for t in self.inputs])
 
     @classmethod
     def call(F, *args: Tensor | int | float) -> Tensor:
         f = F()  # Create fresh instance for each call
-        tensors = (Tensor(x) if isinstance(x, (int, float)) else x for x in args)
-        result = f(*tensors)
+        result = f(*args)
         return Tensor(result, f=f, is_leaf=False, requires_grad=f.requires_grad())
 
 
 # mypy: disable-error-code="override"
 class Add(Function):
-    def forward(self, x: "Tensor", y: "Tensor") -> NDArray[np.floating] | int | float:
-        return x.data + y.data
+    def forward(self, x: "Tensor", y: int | float | "Tensor") -> NDArray[np.floating]:
+        return x.data + (y.data if isinstance(y, Tensor) else y)
 
     def backward(self, out_grad: "Tensor") -> tuple["Tensor", "Tensor"]:
         return out_grad, out_grad
