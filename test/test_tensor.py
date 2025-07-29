@@ -114,9 +114,11 @@ def test_square():
     a = ComparableTensor(np.random.randn(2, 3), requires_grad=True)
     a.square().assert_all()
 
+
 def test_sqrt():
     a = ComparableTensor(np.random.randn(2, 3), requires_grad=True)
     a.sqrt().assert_all()
+
 
 def test_mean():
     a = ComparableTensor(np.random.randn(2, 3), requires_grad=True)
@@ -149,6 +151,7 @@ def test_mean():
     x.mean(1, keepdim=False).assert_all()
     x.mean(2, keepdim=False).assert_all()
 
+
 def test_sum():
     a = ComparableTensor(np.random.randn(2, 3, 4), requires_grad=True)
 
@@ -157,10 +160,9 @@ def test_sum():
     a.sum(1).assert_all()
     a.sum(2).assert_all()
 
+
 def test_std():
-    a = ComparableTensor(
-        np.random.nrandom(2,3,4), requires_grad=True
-    )
+    a = ComparableTensor(np.random.nrandom(2, 3, 4), requires_grad=True)
     b = a.batch_norm()
     c = b.sum()
     c.backward()

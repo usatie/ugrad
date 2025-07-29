@@ -272,7 +272,7 @@ class Pow(Function):
 
 class Sum(Function):
     def forward(
-            self, x: "Tensor", dim: Optional[int], keepdim: bool
+        self, x: "Tensor", dim: Optional[int], keepdim: bool
     ) -> NDArray[np.floating] | int | float:
         if dim is None:
             out = x.data.sum(keepdims=keepdim)
@@ -285,7 +285,7 @@ class Sum(Function):
         out = Tensor(np.zeros_like(x.data))
         if dim is not None:
             if not keepdim:
-                return out + out_grad.unsqueeze(dim) # let numpy broadcast
+                return out + out_grad.unsqueeze(dim)  # let numpy broadcast
             else:
                 return out + out_grad
         else:
