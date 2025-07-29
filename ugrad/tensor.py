@@ -209,7 +209,8 @@ class Function:
 # mypy: disable-error-code="override"
 class Add(Function):
     def forward(self, x: "Tensor", y: int | float | "Tensor") -> NDArray[np.floating]:
-        return x.data + (y.data if isinstance(y, Tensor) else y)
+        other = y.data if isinstance(y, Tensor) else y
+        return x.data + other
 
     def backward(self, out_grad: "Tensor") -> tuple["Tensor", "Tensor"]:
         return out_grad, out_grad
@@ -224,12 +225,15 @@ class Neg(Function):
 
 
 class Mul(Function):
-    def forward(self, x: "Tensor", y: "Tensor") -> NDArray[np.floating] | int | float:
-        return x.data * y.data
+    def forward(self, x: "Tensor", y: int | float | "Tensor") -> NDArray[np.floating]:
+
+        other = y.data if isinstance(y, Tensor) else y
+        return x.data * other
 
     def backward(self, out_grad: "Tensor") -> tuple["Tensor", "Tensor"]:
         x, y = self.inputs
-        x_grad = Tensor(out_grad.data * y.data)
+        other = y.data if isinstance(y, Tensor) else y
+        x_grad = Tensor(out_grad.data * other)
         y_grad = Tensor(out_grad.data * x.data)
         return x_grad, y_grad
 
