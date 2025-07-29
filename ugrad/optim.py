@@ -3,7 +3,7 @@ from typing import Self, List
 
 
 class SGD:
-    def __init__(self, params: List[Tensor], lr: float, momentum: float) -> None:
+    def __init__(self, params: List[Tensor], lr: float, momentum: float):
         self.params = params
         self.lr = lr
         self.momentum = momentum
