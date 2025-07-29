@@ -123,7 +123,8 @@ class Tensor:
 
     def batch_norm(self) -> "Tensor":
         x = self
-        y = (x - x.mean()) / x.std()
+        eps = 1e-6
+        y = (x - x.mean(0)) / x.std(0)
         return y
 
     def std(

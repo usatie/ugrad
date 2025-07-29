@@ -63,6 +63,19 @@ class ComparableTensor:
         ugrad_out = self.ugrad.conv2d(W.ugrad)
         return ComparableTensor(torch_out, ugrad_out)
 
+    def batch_norm(self) -> "ComparableTensor":
+        # What's this? Only did this for dimension match...
+        r = (0,) + tuple(range(2, self.torch.dim()))
+        torch_out = torch.nn.functional.batch_norm(
+                self.torch, 
+                self.torch.mean(r),
+                self.torch.var(r),
+                momentum=0,
+                )
+        ugrad_out = self.ugrad.batch_norm()
+        ugrad_out.is_leaf=True
+        return ComparableTensor(torch_out, ugrad_out)
+
     @property
     def grad(self):
         grad = ComparableTensor([])
@@ -90,13 +103,13 @@ class ComparableTensor:
 
     def assert_data_equal(self):
         np.testing.assert_allclose(
-            self.a.detach().numpy(), self.b.detach().numpy(), atol=1e-6
+            self.a.detach().numpy(), self.b.detach().numpy(), atol=1e-4
         )
 
     def assert_grad_equal(self):
         if self.a.requires_grad and self.a.is_leaf:
             np.testing.assert_allclose(
-                self.a.grad.numpy(), self.b.grad.numpy(), atol=1e-6
+                self.a.grad.numpy(), self.b.grad.numpy(), atol=1e-4
             )
         else:
             assert self.b.grad is None

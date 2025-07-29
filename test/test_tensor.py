@@ -233,6 +233,13 @@ def test_grad():
     y.assert_all()
     out.assert_all()
 
+def test_batch_nomr():
+    a = ComparableTensor(np.random.randn(3, 5))
+    b = a.batch_norm()
+    b.assert_all()
+    ComparableTensor(np.random.randn(3, 4, 5)).batch_norm().assert_all()
+    ComparableTensor(np.random.randn(2, 3, 4, 5)).batch_norm().assert_all()
+
 
 class LinearLayer:
     def __init__(self, size_in, size_out, activation=True):
