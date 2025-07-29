@@ -85,10 +85,7 @@ class Tensor:
         return Matmul.call(self, other)
 
     def sum(self, dim: Optional[int] = None, keepdim: bool = False) -> "Tensor":
-        if keepdim and dim is not None:
-            return Sum.call(self, dim).unsqueeze(dim)
-        else:
-            return Sum.call(self, dim)
+        return Sum.call(self, dim, keepdim)
 
     def t(self) -> "Tensor":
         return Transpose.call(self)
@@ -100,7 +97,8 @@ class Tensor:
         return Exponential.call(self)
 
     def softmax(self, dim: int) -> "Tensor":
-        return self.exp() / self.exp().sum(dim).unsqueeze(dim)
+        e = self.exp()
+        return e / e.sum(dim, keepdim=True)
 
     def log(self) -> "Tensor":
         return LogN.call(self)
@@ -123,9 +121,14 @@ class Tensor:
     def sqrt(self) -> "Tensor":
         return self**0.5
 
-    def std(self, dim: Optional[int] = None, correction=1) -> "Tensor":
+    def batch_norm(self) -> "Tensor":
+        x = self
+        y = (x - x.mean()) / x.std()
+        return y
+
+    def std(self, dim: Optional[int] = None, correction=1, keepdim=False) -> "Tensor":
         meanzero = self - self.mean(dim, keepdim=True)
-        sqsum = meanzero.square().sum(dim)
+        sqsum = meanzero.square().sum(dim, keepdim=keepdim)
         N = prod(self.shape) / prod(sqsum.shape)
         out = sqsum / max(0, N - correction)
         return out.sqrt()
@@ -165,7 +168,6 @@ class Tensor:
 def unbroadcast(x, shape):
     # Assume x is broadcasted from original shape
     x = x.data.copy()
-    new_x = np.zeros_like(shape, dtype=np.float64)
     i = 1
     while x.shape != shape and i <= len(x.shape):
         dim = x.shape[-i]
@@ -265,21 +267,27 @@ class Pow(Function):
 
 class Sum(Function):
     def forward(
-        self, x: "Tensor", dim: Optional[int] = None
+            self, x: "Tensor", dim: Optional[int], keepdim: bool
     ) -> NDArray[np.floating] | int | float:
+        keepdim = bool(keepdim.data.item())
         if dim is None:
-            return x.data.sum()
+            out = x.data.sum(keepdims=keepdim)
+            return out
         else:
             dim = int(dim.data.item())
-            return x.data.sum(dim)
+            return x.data.sum(dim, keepdims=keepdim)
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
-        (x, dim) = self.inputs
+        (x, dim, keepdim) = self.inputs
         out = Tensor(np.zeros_like(x.data))
-        if dim is None:
-            return out + out_grad
+        keepdim = bool(keepdim.data.item())
+        if dim is not None:
+            if not keepdim:
+                return out + out_grad.unsqueeze(dim) # let numpy broadcast
+            else:
+                return out + out_grad
         else:
-            return out + out_grad.unsqueeze(dim)
+            return out + out_grad
 
 
 class Unsqueeze(Function):

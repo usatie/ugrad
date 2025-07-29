@@ -58,12 +58,8 @@ class MLP:
 
     def __call__(self, x):
         for l in self.layers:
-            x = l(x)
-        print("before softmax")
-        print(x.data[0])
+            x = l(x.batch_norm())
         x = x.softmax(1)
-        print("after softmax")
-        print(x.data[0])
         return x
 
     def parameters(self):
@@ -73,7 +69,6 @@ class MLP:
 def main():
     model = MLP((784, 10))
     X_train, Y_train, X_test, Y_test = fetch_mnist()
-    print(Y_train.shape)
 
     optimizer = SGD(model.parameters(), lr=0.1, momentum=0.9)
 
@@ -86,7 +81,7 @@ def main():
         eps = 1e-6
         return (-((eps + y_pred * y_gt).log())).sum() * (1 / bs)
 
-    n_epochs = 100000
+    n_epochs = 1000
     batch_size = 32
     idx = np.random.randint(0, len(X_train), batch_size)
     for i in range(n_epochs):
@@ -100,8 +95,6 @@ def main():
         if i % 1000 == 0:
             print(loss.data.item())
         loss.backward()
-        print(model.layers[-1].bias)
-        exit()
         optimizer.step()
     print(model(Tensor(X_train)).data.shape)
 

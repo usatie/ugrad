@@ -83,6 +83,8 @@ def test_softmax():
 
     c.assert_all()
     b.assert_all()
+    print(b)
+    print(a)
     a.assert_all()
 
 
@@ -147,6 +149,18 @@ def test_mean():
     x.mean(1, keepdim=False).assert_all()
     x.mean(2, keepdim=False).assert_all()
 
+def test_std():
+    a = ComparableTensor(
+        np.random.nrandom(2,3,4), requires_grad=True
+    )
+    b = a.batch_norm()
+    c = b.sum()
+    c.backward()
+
+    c.assert_all()
+    b.assert_all()
+    a.assert_all()
+
 
 def test_std():
     a = ComparableTensor(
@@ -156,6 +170,7 @@ def test_std():
     a.std(1, correction=1).assert_all()
     a.std(correction=0).assert_all()
     a.std(correction=1).assert_all()
+    a.std().assert_all()
     a.std(1).sum().backward()
     a.assert_all()
 
