@@ -149,9 +149,11 @@ class Tensor:
         grads = grads if isinstance(grads, tuple) else (grads,)
         # Single loop: initialize, update grads, and recurse
         for t, g in zip(self.f.inputs, grads):
+            if not isinstance(t, Tensor):
+                continue
             grad = Tensor(np.zeros_like(t.data, dtype=np.float64))
             if grad.data.shape != g.data.shape:
-                g = unbroadcast(g, t.data.shape)
+                g = unbroadcast(g, grad.data.shape)
             grad += g
             if t.requires_grad and t.is_leaf:
                 # Update gradient
