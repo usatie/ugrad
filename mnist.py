@@ -78,7 +78,7 @@ def transform_target(target, n_classes: int):
 def evaluate(model, X_test, Y_test):
     y_pred = model(Tensor(X_test))
     accuracy = (y_pred.data.argmax(-1) == Y_test).sum() / len(X_test)
-    print(f"Accuracy: {accuracy}")
+    return accuracy
 
 
 def main():
@@ -93,7 +93,7 @@ def main():
         y_gt = Tensor(transform_target(y.data, n_classes))
         return -(y_gt * y_pred).mean()
 
-    n_epochs = 100000
+    n_epochs = 10000
     batch_size = 32
     print("-----Initial Evaluation-----")
     evaluate(model, X_test, Y_test)
@@ -106,13 +106,15 @@ def main():
         optimizer.zero_grad()
         out = model(Tensor(X))
         loss = loss_fn(out, Tensor(Y))
-        if i % 100 == 0:
+        if i % 1000 == 0:
             print("-----Evaluation-----")
             print(f"loss: {loss.data.item()}")
-            evaluate(model, X_test, Y_test)
+            accuracy = evaluate(model, X_test, Y_test)
+            print(f"Accuracy: {accuracy}")
         loss.backward()
 
         optimizer.step()
+    assert evaluate(model, X_test, Y_test) >= 0.95, "Model did not reach the expected accuracy."
 
 
 if __name__ == "__main__":
