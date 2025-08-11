@@ -2,6 +2,7 @@ import gzip, os
 import numpy as np
 from ugrad import Tensor
 from ugrad.optim import SGD
+import tqdm
 
 
 def fetch_mnist():
@@ -11,17 +12,28 @@ def fetch_mnist():
     X_train = (
         parse(BASE + "/mnist/train-images-idx3-ubyte.gz")[0x10:]
         .reshape((-1, 28 * 28))
-        .astype(np.float32) / 255.0
+        .astype(np.float32)
     )
     Y_train = parse(BASE + "/mnist/train-labels-idx1-ubyte.gz")[8:]
     X_test = (
         parse(BASE + "/mnist/t10k-images-idx3-ubyte.gz")[0x10:]
         .reshape((-1, 28 * 28))
-        .astype(np.float32) / 255.0
+        .astype(np.float32)
     )
     Y_test = parse(BASE + "/mnist/t10k-labels-idx1-ubyte.gz")[8:]
     return X_train, Y_train, X_test, Y_test
 
+def preprocess(X_train, Y_train, X_test, Y_test):
+    mean = X_train.mean()
+    std = X_train.std()
+    X_train = (X_train - mean) / std
+    X_test = (X_test - mean) / std
+    return (
+        X_train.astype(np.float32),
+        Y_train.astype(np.int64),
+        X_test.astype(np.float32),
+        Y_test.astype(np.int64),
+    )
 
 class Linear:
     def __init__(self, in_channel, out_channel, bias=True, activation="relu"):
@@ -83,7 +95,7 @@ def evaluate(model, X_test, Y_test):
 
 def main():
     model = MLP((784, 128, 32, 10))
-    X_train, Y_train, X_test, Y_test = fetch_mnist()
+    X_train, Y_train, X_test, Y_test = preprocess(*fetch_mnist())
 
     optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
 
@@ -93,11 +105,9 @@ def main():
         y_gt = Tensor(transform_target(y.data, n_classes))
         return -(y_gt * y_pred).mean()
 
-    n_epochs = 10000
+    n_steps = 10000
     batch_size = 32
-    print("-----Initial Evaluation-----")
-    evaluate(model, X_test, Y_test)
-    for i in range(n_epochs):
+    for step in tqdm.tqdm(range(n_steps)):
         idx = np.random.randint(0, len(X_train), batch_size)
         X = X_train[idx]
         Y = Y_train[idx]
@@ -106,9 +116,9 @@ def main():
         optimizer.zero_grad()
         out = model(Tensor(X))
         loss = loss_fn(out, Tensor(Y))
-        if i % 1000 == 0:
-            print("-----Evaluation-----")
-            print(f"loss: {loss.data.item()}")
+        if step % 1000 == 0:
+            print(f"-----Evaluation (Step: {step})-----")
+            print(f"loss: {loss.data.item():.4f}")
             accuracy = evaluate(model, X_test, Y_test)
             print(f"Accuracy: {accuracy}")
         loss.backward()
