@@ -121,12 +121,6 @@ class Tensor:
     def sqrt(self) -> "Tensor":
         return self**0.5
 
-    def batch_norm(self) -> "Tensor":
-        x = self
-        eps = 1e-6
-        y = (x - x.mean(0)) / x.std(0)
-        return y
-
     def std(
         self, dim: Optional[int] = None, correction: int = 1, keepdim: bool = False
     ) -> "Tensor":

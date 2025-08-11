@@ -162,17 +162,6 @@ def test_sum():
 
 
 def test_std():
-    a = ComparableTensor(np.random.nrandom(2, 3, 4), requires_grad=True)
-    b = a.batch_norm()
-    c = b.sum()
-    c.backward()
-
-    c.assert_all()
-    b.assert_all()
-    a.assert_all()
-
-
-def test_std():
     a = ComparableTensor(
         np.arange(0, 24, dtype=np.float64).reshape((2, 12)), requires_grad=True
     )
@@ -232,14 +221,6 @@ def test_grad():
     wx.assert_all()
     y.assert_all()
     out.assert_all()
-
-def test_batch_nomr():
-    a = ComparableTensor(np.random.randn(3, 5))
-    b = a.batch_norm()
-    b.assert_all()
-    ComparableTensor(np.random.randn(3, 4, 5)).batch_norm().assert_all()
-    ComparableTensor(np.random.randn(2, 3, 4, 5)).batch_norm().assert_all()
-
 
 class LinearLayer:
     def __init__(self, size_in, size_out, activation=True):
