@@ -162,7 +162,7 @@ class Tensor:
                 if t.grad is None:
                     t.grad = grad
                 else:
-                    t.grad.data += grad.data
+                    t.grad.assign(t.grad + grad)
             # Recurse
             t.backward(t.grad if t.requires_grad and t.is_leaf else grad)
 
