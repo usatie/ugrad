@@ -3,10 +3,12 @@ from typing import Self, List
 
 
 class SGD:
-    def __init__(self, params: List[Tensor], lr: float, momentum: float):
+    def __init__(self, params: List[Tensor], lr: float, momentum: float, weight_decay: float = .0, nesterov: bool = False):
         self.params = params
         self.lr = lr
         self.momentum = momentum
+        self.wd = weight_decay
+        self.nesterov = nesterov
         self.v = [Tensor.zeros_like(p) for p in params]
 
     def zero_grad(self) -> None:
@@ -15,5 +17,9 @@ class SGD:
 
     def step(self) -> None:
         for p, v in zip(self.params, self.v):
-            v.data = self.momentum * v.data - self.lr * p.grad.data
-            p.data += v.data
+            g = p.grad.data + p.data * self.wd
+            v.data = self.momentum * v.data - self.lr * g
+            if self.nesterov:
+                p.data += self.momentum * v.data - self.lr * g
+            else:
+                p.data += v.data

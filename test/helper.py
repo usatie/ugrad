@@ -134,11 +134,10 @@ register("__rmul__")
 ComparableSGD is a wrapper around both PyTorch and ugrad SGD optimizers.
 """
 
-
-class ComparableSGD:
-    def __init__(self, params, *args, **kwargs):
-        self.a = torch.optim.SGD([p.torch for p in params], *args, **kwargs)
-        self.b = ugrad.optim.SGD([p.ugrad for p in params], *args, **kwargs)
+class ComparableOptimizer:
+    def __init__(self, topt, uopt, params, *args, **kwargs):
+        self.a = topt([p.torch for p in params], *args, **kwargs)
+        self.b = uopt([p.ugrad for p in params], *args, **kwargs)
 
     def zero_grad(self):
         self.a.zero_grad()
@@ -147,3 +146,7 @@ class ComparableSGD:
     def step(self):
         self.a.step()
         self.b.step()
+
+class ComparableSGD(ComparableOptimizer):
+    def __init__(self, params, *args, **kwargs):
+        super().__init__(torch.optim.SGD, ugrad.optim.SGD, params, *args, **kwargs)
