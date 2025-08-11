@@ -55,6 +55,11 @@ class Tensor:
     def __truediv__(self, other: "Tensor" | int | float) -> "Tensor":
         return self * (other**-1)
 
+    def assign(self, other: "Tensor" | int | float) -> "Tensor":
+        if other.__class__ is not Tensor: other = Tensor(other)
+        self.data = other.data
+        return self
+
     @property
     def shape(self) -> tuple[int, ...]:
         return self.data.shape

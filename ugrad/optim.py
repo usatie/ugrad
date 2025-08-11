@@ -16,10 +16,10 @@ class SGD:
             p.grad = None
 
     def step(self) -> None:
-        for p, v in zip(self.params, self.v):
-            g = p.grad.data + p.data * self.wd
-            v.data = self.momentum * v.data - self.lr * g
+        for w, v in zip(self.params, self.v):
+            g = w.grad + w * self.wd
+            v.assign(self.momentum * v - self.lr * g)
             if self.nesterov:
-                p.data += self.momentum * v.data - self.lr * g
+                w.assign(w + self.momentum * v - self.lr * g)
             else:
-                p.data += v.data
+                w.assign(w + v)
