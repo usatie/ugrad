@@ -18,12 +18,18 @@ class MicroModel:
         return [self.W1, self.W2, self.W3]
 
 
-def _test_sgd(lr=0.01, momentum=0.9, weight_decay=.0, nesterov=False, steps=1):
+def _test_sgd(lr=0.01, momentum=0.9, weight_decay=0.0, nesterov=False, steps=1):
     x = Tensor(np.random.randn(32, 4))
     y = Tensor(np.random.randint(0, 2, 32).reshape(32, 1))
     model = MicroModel()
 
-    optimizer = SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay, nesterov=nesterov)
+    optimizer = SGD(
+        model.parameters(),
+        lr=lr,
+        momentum=momentum,
+        weight_decay=weight_decay,
+        nesterov=nesterov,
+    )
 
     # Define a simple MSE loss function
     def loss_fn(output, target):
@@ -41,14 +47,42 @@ def _test_sgd(lr=0.01, momentum=0.9, weight_decay=.0, nesterov=False, steps=1):
         for p in model.parameters():
             p.assert_all()
 
-def test_sgd(): _test_sgd(lr=0.01, momentum=0.9, steps=1)
-def test_sgd_large_lr(): _test_sgd(lr=10.0, momentum=0.9, steps=1)
-def test_sgd_no_momentum(): _test_sgd(lr=0.01, momentum=0.0, steps=1)
-def test_sgd_weight_decay(): _test_sgd(lr=0.01, momentum=0.9, weight_decay=0.1, steps=1)
-def test_nesterov(): _test_sgd(nesterov=True, steps=1)
 
-def test_sgd_multistep(): _test_sgd(lr=0.01, momentum=0.9, steps=10)
-def test_sgd_large_multistep(): _test_sgd(lr=0.01, momentum=0.9, steps=100)
-def test_sgd_large_multistep_large_lr(): _test_sgd(lr=10.0, momentum=0.9, steps=100)
-def test_sgd_weight_decay(): _test_sgd(lr=0.01, momentum=0.9, weight_decay=0.1, steps=10)
-def test_nesterov_multistep(): _test_sgd(nesterov=True, steps=10)
+def test_sgd():
+    _test_sgd(lr=0.01, momentum=0.9, steps=1)
+
+
+def test_sgd_large_lr():
+    _test_sgd(lr=10.0, momentum=0.9, steps=1)
+
+
+def test_sgd_no_momentum():
+    _test_sgd(lr=0.01, momentum=0.0, steps=1)
+
+
+def test_sgd_weight_decay():
+    _test_sgd(lr=0.01, momentum=0.9, weight_decay=0.1, steps=1)
+
+
+def test_nesterov():
+    _test_sgd(nesterov=True, steps=1)
+
+
+def test_sgd_multistep():
+    _test_sgd(lr=0.01, momentum=0.9, steps=10)
+
+
+def test_sgd_large_multistep():
+    _test_sgd(lr=0.01, momentum=0.9, steps=100)
+
+
+def test_sgd_large_multistep_large_lr():
+    _test_sgd(lr=10.0, momentum=0.9, steps=100)
+
+
+def test_sgd_weight_decay():
+    _test_sgd(lr=0.01, momentum=0.9, weight_decay=0.1, steps=10)
+
+
+def test_nesterov_multistep():
+    _test_sgd(nesterov=True, steps=10)

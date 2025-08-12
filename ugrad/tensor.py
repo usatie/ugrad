@@ -56,7 +56,8 @@ class Tensor:
         return self * (other**-1)
 
     def assign(self, other: "Tensor" | int | float) -> "Tensor":
-        if other.__class__ is not Tensor: other = Tensor(other)
+        if other.__class__ is not Tensor:
+            other = Tensor(other)
         self.data = other.data
         return self
 
@@ -134,6 +135,10 @@ class Tensor:
         N = prod(self.shape) / prod(sqsum.shape)
         out = sqsum / max(0, N - correction)
         return out.sqrt()
+
+    def linear(self, weight: "Tensor", bias: Optional["Tensor"]) -> "Tensor":
+        out = self.matmul(weight.t())
+        return out + bias if bias else out
 
     def conv2d(self, filters: "Tensor") -> "Tensor":
         return Conv2D.call(self, filters)

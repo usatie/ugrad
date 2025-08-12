@@ -174,6 +174,19 @@ def test_std():
     a.assert_all()
 
 
+def test_linear():
+    N, in_channel, out_channel = 4, 6, 3
+    x = ComparableTensor(np.random.randn(N, in_channel), requires_grad=False)
+    W = ComparableTensor(np.random.randn(out_channel, in_channel), requires_grad=True)
+    b = ComparableTensor(np.random.randn(N, out_channel), requires_grad=True)
+    out = x.linear(W, b)
+    out.assert_all()
+    m = ComparableTensor(np.random.randn(N, out_channel))
+    (out * m).sum().backward()
+    W.assert_all()
+    b.assert_all()
+
+
 def test_conv2d():
     N, in_channel, out_channel, W, H = 4, 2, 3, 3, 3
     ks = 2
@@ -221,6 +234,7 @@ def test_grad():
     wx.assert_all()
     y.assert_all()
     out.assert_all()
+
 
 class LinearLayer:
     def __init__(self, size_in, size_out, activation=True):

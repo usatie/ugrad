@@ -1,6 +1,7 @@
 import ugrad
 import torch
 import numpy as np
+from typing import Optional
 
 """
 ComparableTensor enables easy comparison between a PyTorch tensor and a ugrad Tensor. Assuming the same operations are supported by both, it allows you to verify that the results are consistent.
@@ -58,6 +59,13 @@ class ComparableTensor:
         )
         return f"<torch {self.a.detach().numpy()}, grad={grad_a}, requires_grad={self.a.requires_grad} is_leaf={self.a.is_leaf}>\n<ugrad {self.b.detach().numpy()}, grad={grad_b}, requires_grad={self.b.requires_grad} is_leaf={self.b.is_leaf}>"
 
+    def linear(
+        self, W: "ComparableTensor", b: Optional["ComparableTensor"]
+    ) -> "ComparableTensor":
+        torch_out = torch.nn.functional.linear(self.torch, W.torch, b.torch if b else b)
+        ugrad_out = self.ugrad.linear(W.ugrad, b.ugrad if b else b)
+        return ComparableTensor(torch_out, ugrad_out)
+
     def conv2d(self, W: "ComparableTensor") -> "ComparableTensor":
         torch_out = torch.nn.functional.conv2d(self.torch, W.torch)
         ugrad_out = self.ugrad.conv2d(W.ugrad)
@@ -67,13 +75,13 @@ class ComparableTensor:
         # What's this? Only did this for dimension match...
         r = (0,) + tuple(range(2, self.torch.dim()))
         torch_out = torch.nn.functional.batch_norm(
-                self.torch, 
-                self.torch.mean(r),
-                self.torch.var(r),
-                momentum=0,
-                )
+            self.torch,
+            self.torch.mean(r),
+            self.torch.var(r),
+            momentum=0,
+        )
         ugrad_out = self.ugrad.batch_norm()
-        ugrad_out.is_leaf=True
+        ugrad_out.is_leaf = True
         return ComparableTensor(torch_out, ugrad_out)
 
     @property
@@ -134,6 +142,7 @@ register("__rmul__")
 ComparableSGD is a wrapper around both PyTorch and ugrad SGD optimizers.
 """
 
+
 class ComparableOptimizer:
     def __init__(self, topt, uopt, params, *args, **kwargs):
         self.a = topt([p.torch for p in params], *args, **kwargs)
@@ -146,6 +155,7 @@ class ComparableOptimizer:
     def step(self):
         self.a.step()
         self.b.step()
+
 
 class ComparableSGD(ComparableOptimizer):
     def __init__(self, params, *args, **kwargs):

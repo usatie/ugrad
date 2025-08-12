@@ -3,7 +3,14 @@ from typing import Self, List
 
 
 class SGD:
-    def __init__(self, params: List[Tensor], lr: float, momentum: float, weight_decay: float = .0, nesterov: bool = False):
+    def __init__(
+        self,
+        params: List[Tensor],
+        lr: float,
+        momentum: float,
+        weight_decay: float = 0.0,
+        nesterov: bool = False,
+    ):
         self.params = params
         self.lr = lr
         self.momentum = momentum
