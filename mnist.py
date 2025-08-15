@@ -41,9 +41,8 @@ class Linear:
     def __init__(self, in_channel, out_channel, bias=True, activation="relu"):
         # np.random.normal(0,1) was too large, causing gradient explosion
         # Xavier initialization
-        self.W = Tensor(
-            np.random.normal(0, np.sqrt(2.0 / in_channel), (out_channel, in_channel)),
-            requires_grad=True,
+        self.W = Tensor.kaiming_uniform(
+            out_channel, in_channel, nonlinearity=activation, requires_grad=True
         )
         self.bias = Tensor(np.zeros(out_channel), requires_grad=True) if bias else None
         self.activation = activation

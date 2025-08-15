@@ -15,6 +15,8 @@ def calculate_gain(nonlinearity: str, a: float = 0.0) -> float:
         return 5.0 / 3.0
     elif nonlinearity == "sigmoid":
         return 1.0
+    elif nonlinearity is None or nonlinearity == "linear":
+        return 1.0
     else:
         raise ValueError(f"Unsupported nonlinearity: {nonlinearity}")
 
@@ -114,15 +116,18 @@ class Tensor:
         u2 = Tensor.rand(*shape, **kwargs)
         R = (-2 * u1.log()).sqrt()
         theta = 2 * math.pi * u2
-        return R * theta.cos()
+        z1 = R * theta.cos()
+        return Tensor(z1.data, **kwargs)  # to ensure is_leaf=True
 
     @staticmethod
     def normal(*shape: int, mean: float = 0.0, std: float = 1.0, **kwargs) -> "Tensor":
-        return (std * Tensor.randn(*shape, **kwargs)) + mean
+        n = (std * Tensor.randn(*shape, **kwargs)) + mean
+        return Tensor(n.data, **kwargs)  # to ensure is_leaf=True
 
     @staticmethod
     def uniform(*shape: int, low: float = 0.0, high: float = 0.0, **kwargs) -> "Tensor":
-        return ((high - low) * Tensor.rand(*shape, **kwargs)) + low
+        u = ((high - low) * Tensor.rand(*shape, **kwargs)) + low
+        return Tensor(u.data, **kwargs)  # to ensure is_leaf=True
 
     @staticmethod
     def xavier_uniform(*shape, gain=1.0, **kwargs) -> "Tensor":
