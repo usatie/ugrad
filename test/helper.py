@@ -8,7 +8,37 @@ ComparableTensor enables easy comparison between a PyTorch tensor and a ugrad Te
 """
 
 
-class ComparableTensor:
+class ComparableTensorMeta(type):
+    def __getattr__(cls, name):
+        """Generic staticmethod forwarder for missing class attributes"""
+        # Check if this attribute exists as a staticmethod on both torch and ugrad.Tensor
+        if hasattr(torch, name) and hasattr(ugrad.Tensor, name):
+
+            def static_forwarder(*args, **kwargs):
+                # Convert ComparableTensor args
+                torch_args = []
+                ugrad_args = []
+
+                for arg in args:
+                    if isinstance(arg, cls):
+                        torch_args.append(arg.torch)
+                        ugrad_args.append(arg.ugrad)
+                    else:
+                        torch_args.append(arg)
+                        ugrad_args.append(arg)
+
+                # Call method on both
+                torch_result = getattr(torch, name)(*torch_args, **kwargs)
+                ugrad_result = getattr(ugrad.Tensor, name)(*ugrad_args, **kwargs)
+
+                return cls(torch_result, ugrad_result)
+
+            return static_forwarder
+
+        raise AttributeError(f"'{cls.__name__}' has no attribute '{name}'")
+
+
+class ComparableTensor(metaclass=ComparableTensorMeta):
     def __init__(self, *args, **kwargs):
         if len(args) == 2:
             a, b = args

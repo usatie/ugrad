@@ -202,6 +202,107 @@ def test_conv2d():
     filters.assert_all()
 
 
+def test_zeros():
+    ComparableTensor.zeros(42).assert_all()
+    ComparableTensor.zeros((42,)).assert_all()
+    ComparableTensor.zeros((2, 3, 4)).assert_all()
+
+
+def test_zeros_like():
+    a = ComparableTensor(np.random.randn(42))
+    b = ComparableTensor(np.random.randn(2, 3, 4))
+    ComparableTensor.zeros_like(a).assert_all()
+    ComparableTensor.zeros_like(b).assert_all()
+
+
+def test_randn():
+    a = Tensor.randn(10, 20, 30, 40)
+    assert a.shape == (10, 20, 30, 40)
+    assert abs(a.mean().data) < 0.01, "Mean should be close to 0"
+    assert abs(a.std().data - 1.0) < 0.01, "Std should be close to 1"
+
+
+def test_normal():
+    a = Tensor.normal(10, 20, 30, 40, mean=42.0, std=3.0)
+    assert a.shape == (10, 20, 30, 40)
+    assert abs(a.mean().data - 42.0) < 0.1, "Mean should be close to 42.0"
+    assert abs(a.std().data - 3.0) < 0.1, "Std should be close to 3.0"
+
+
+def test_uniform():
+    a = Tensor.uniform(10, 20, 30, 40, low=0.0, high=1.0)
+    assert a.shape == (10, 20, 30, 40)
+    assert np.all(a.data >= 0.0) and np.all(
+        a.data <= 1.0
+    ), "Values should be in [0.0, 1.0]"
+    # How can I test the uniformity of the distribution?
+    assert abs(a.mean().data - 0.5) < 0.1, "Mean should be close to 0.5"
+    assert abs(a.std().data - 0.29) < 0.1, "Std should be close to 0.29"
+    assert (
+        abs((a.data < 0.1).sum() - a.data.size * 0.1) < a.data.size * 0.01
+    ), "Approximately 10% of values should be < 0.1"
+    assert (
+        abs((a.data < 0.2).sum() - a.data.size * 0.2) < a.data.size * 0.01
+    ), "Approximately 20% of values should be < 0.2"
+    assert (
+        abs((a.data < 0.3).sum() - a.data.size * 0.3) < a.data.size * 0.01
+    ), "Approximately 30% of values should be < 0.3"
+    assert (
+        abs((a.data < 0.4).sum() - a.data.size * 0.4) < a.data.size * 0.01
+    ), "Approximately 40% of values should be < 0.4"
+    assert (
+        abs((a.data < 0.5).sum() - a.data.size * 0.5) < a.data.size * 0.01
+    ), "Approximately 50% of values should be < 0.5"
+    assert (
+        abs((a.data < 0.6).sum() - a.data.size * 0.6) < a.data.size * 0.01
+    ), "Approximately 60% of values should be < 0.6"
+    assert (
+        abs((a.data < 0.7).sum() - a.data.size * 0.7) < a.data.size * 0.01
+    ), "Approximately 70% of values should be < 0.7"
+    assert (
+        abs((a.data < 0.8).sum() - a.data.size * 0.8) < a.data.size * 0.01
+    ), "Approximately 80% of values should be < 0.8"
+    assert (
+        abs((a.data < 0.9).sum() - a.data.size * 0.9) < a.data.size * 0.01
+    ), "Approximately 90% of values should be < 0.9"
+
+
+def test_xavier_uniform():
+    a = Tensor.xavier_uniform(10, 20, 3, 3)
+    assert a.shape == (10, 20, 3, 3)
+    assert abs(a.mean().data) < 0.01, "Mean should be close to 0"
+    fan_out = 10 * 3 * 3
+    fan_in = 20 * 3 * 3
+    bound = np.sqrt(6 / (fan_in + fan_out))
+    assert abs(a.data.min() + bound) < 0.01, "Min should be close to -bound"
+    assert abs(a.data.max() - bound) < 0.01, "Max should be close to bound"
+
+
+def _test_kaiming_uniform(nonlinearity, gain):
+    if nonlinearity is None:
+        a = Tensor.kaiming_uniform(10, 20, 3, 3)
+    else:
+        a = Tensor.kaiming_uniform(10, 20, 3, 3, nonlinearity=nonlinearity)
+    assert a.shape == (10, 20, 3, 3)
+    assert abs(a.mean().data) < 0.01, "Mean should be close to 0"
+    fan_in = 20 * 3 * 3
+    bound = gain * np.sqrt(3 / fan_in)
+    assert abs(a.data.min() + bound) < 0.01, "Min should be close to -bound"
+    assert abs(a.data.max() - bound) < 0.01, "Max should be close to bound"
+
+
+def test_kaiming_uniform_default():
+    _test_kaiming_uniform(None, gain=np.sqrt(2.0))
+
+
+def test_kaiming_uniform_relu():
+    _test_kaiming_uniform("relu", gain=np.sqrt(2.0))
+
+
+def test_kaiming_uniform_sigmoid():
+    _test_kaiming_uniform("sigmoid", gain=1.0)
+
+
 np_w = np.random.randn(1, 3)
 np_s = np.random.randn(1, 3)
 np_m = np.random.randn(1, 3)

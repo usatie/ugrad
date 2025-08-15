@@ -3,6 +3,20 @@ from typing import Self, Optional, Any
 import numpy as np
 from numpy.typing import NDArray
 from math import prod
+import math
+
+
+def calculate_gain(nonlinearity: str, a: float = 0.0) -> float:
+    if nonlinearity == "relu":
+        return np.sqrt(2.0)
+    elif nonlinearity == "leaky_relu":
+        return np.sqrt(2.0 / (1 + a**2))
+    elif nonlinearity == "tanh":
+        return 5.0 / 3.0
+    elif nonlinearity == "sigmoid":
+        return 1.0
+    else:
+        raise ValueError(f"Unsupported nonlinearity: {nonlinearity}")
 
 
 class Tensor:
@@ -80,12 +94,69 @@ class Tensor:
         return self.data
 
     @staticmethod
-    def zeros(shape: int | tuple[int], dtype: np.dtype) -> "Tensor":
-        return Tensor(np.zeros(shape, dtype))
+    def zeros(*shape: int | tuple[int]) -> "Tensor":
+        return Tensor(np.zeros(*shape))
 
     @staticmethod
     def zeros_like(a: "Tensor") -> "Tensor":
-        return Tensor(np.zeros_like(a.data))
+        return Tensor.zeros(a.shape)
+
+    # Random samples from a uniform distribution over the interval [0, 1)
+    @staticmethod
+    def rand(*shape: int, **kwargs) -> "Tensor":
+        return Tensor(np.random.rand(*shape), **kwargs)
+
+    @staticmethod
+    def randn(*shape: int, **kwargs) -> "Tensor":
+        # Box-Muller transformation for generating standard normal distribution
+        # https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
+        u1 = 1 - Tensor.rand(*shape, **kwargs)  # (0, 1] is used to avoid log(0)
+        u2 = Tensor.rand(*shape, **kwargs)
+        R = (-2 * u1.log()).sqrt()
+        theta = 2 * math.pi * u2
+        return R * theta.cos()
+
+    @staticmethod
+    def normal(*shape: int, mean: float = 0.0, std: float = 1.0, **kwargs) -> "Tensor":
+        return (std * Tensor.randn(*shape, **kwargs)) + mean
+
+    @staticmethod
+    def uniform(*shape: int, low: float = 0.0, high: float = 0.0, **kwargs) -> "Tensor":
+        return ((high - low) * Tensor.rand(*shape, **kwargs)) + low
+
+    @staticmethod
+    def xavier_uniform(*shape, gain=1.0, **kwargs) -> "Tensor":
+        """
+        Xavier/Glorot initialization
+        Assuming shape is (out_ch, in_ch, ...).
+        i.e. weight matrix is used in a transposed manner (x @ w.T)
+        """
+
+        fan_in = shape[1]
+        fan_out = shape[0]
+        if len(shape) > 2:
+            # If more than 2 dimensions, use the product of the last dimensions
+            receptive_field_size = prod(shape[2:])
+            fan_in *= receptive_field_size
+            fan_out *= receptive_field_size
+        a = gain * np.sqrt(6 / (fan_in + fan_out))  # Uniform distribution in [-a, a]
+        return Tensor.uniform(*shape, low=-a, high=a, **kwargs)
+
+    @staticmethod
+    def kaiming_uniform(*shape, a=0.0, nonlinearity="leaky_relu", **kwargs) -> "Tensor":
+        """
+        Kaiming/He initialization
+        Assuming shape is (out_ch, in_ch, ...).
+        i.e. weight matrix is used in a transposed manner (x @ w.T)
+        """
+        fan_in = shape[1]
+        if len(shape) > 2:
+            # If more than 2 dimensions, use the product of the last dimensions
+            receptive_field_size = prod(shape[2:])
+            fan_in *= receptive_field_size
+        gain = calculate_gain(nonlinearity, a)
+        a = gain * np.sqrt(3 / fan_in)
+        return Tensor.uniform(*shape, low=-a, high=a, **kwargs)
 
     def matmul(self, other: Self) -> "Tensor":
         return Matmul.call(self, other)
@@ -101,6 +172,9 @@ class Tensor:
 
     def exp(self) -> "Tensor":
         return Exponential.call(self)
+
+    def cos(self) -> "Tensor":
+        return Cosine.call(self)
 
     def softmax(self, dim: int) -> "Tensor":
         e = self.exp()
@@ -342,6 +416,17 @@ class Exponential(Function):
         # y = exp(x)
         # y' = exp(x)
         return Tensor(out_grad.data * self.out)
+
+
+class Cosine(Function):
+    def forward(self, x: "Tensor") -> NDArray[np.floating]:
+        return np.cos(x.data)
+
+    def backward(self, out_grad: "Tensor") -> "Tensor":
+        # y = cos(x)
+        # y' = -sin(x)
+        (x,) = self.inputs
+        return Tensor(-out_grad.data * np.sin(x.data))
 
 
 class Conv2D(Function):
