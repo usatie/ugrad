@@ -148,6 +148,24 @@ class Tensor:
         return Tensor.uniform(*shape, low=-a, high=a, **kwargs)
 
     @staticmethod
+    def xavier_normal(*shape, gain=1.0, **kwargs) -> "Tensor":
+        """
+        Xavier/Glorot initialization
+        Assuming shape is (out_ch, in_ch, ...).
+        i.e. weight matrix is used in a transposed manner (x @ w.T)
+        """
+
+        fan_in = shape[1]
+        fan_out = shape[0]
+        if len(shape) > 2:
+            # If more than 2 dimensions, use the product of the last dimensions
+            receptive_field_size = prod(shape[2:])
+            fan_in *= receptive_field_size
+            fan_out *= receptive_field_size
+        std = gain * np.sqrt(2 / (fan_in + fan_out))
+        return Tensor.normal(*shape, mean=0.0, std=std, **kwargs)
+
+    @staticmethod
     def kaiming_uniform(*shape, a=0.0, nonlinearity="leaky_relu", **kwargs) -> "Tensor":
         """
         Kaiming/He initialization
@@ -162,6 +180,22 @@ class Tensor:
         gain = calculate_gain(nonlinearity, a)
         a = gain * np.sqrt(3 / fan_in)
         return Tensor.uniform(*shape, low=-a, high=a, **kwargs)
+
+    @staticmethod
+    def kaiming_normal(*shape, a=0.0, nonlinearity="leaky_relu", **kwargs) -> "Tensor":
+        """
+        Kaiming/He initialization
+        Assuming shape is (out_ch, in_ch, ...).
+        i.e. weight matrix is used in a transposed manner (x @ w.T)
+        """
+        fan_in = shape[1]
+        if len(shape) > 2:
+            # If more than 2 dimensions, use the product of the last dimensions
+            receptive_field_size = prod(shape[2:])
+            fan_in *= receptive_field_size
+        gain = calculate_gain(nonlinearity, a)
+        std = gain / np.sqrt(fan_in)  # Normal distribution std
+        return Tensor.normal(*shape, mean=0.0, std=std, **kwargs)
 
     def matmul(self, other: Self) -> "Tensor":
         return Matmul.call(self, other)
