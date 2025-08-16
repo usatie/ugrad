@@ -1,7 +1,7 @@
 import gzip, os
 import numpy as np
 from ugrad import Tensor
-from ugrad.optim import SGD
+from ugrad.optim import SGD, Adam
 from tqdm import trange
 
 
@@ -25,10 +25,14 @@ def fetch_mnist():
 
 
 def preprocess(X_train, Y_train, X_test, Y_test):
+    print(f"Before preprocessing min: {X_train.min():.3f}, max: {X_train.max():.3f}")
+    print(f"Before preprocessing X_train mean: {X_train.mean():.3f}, std: {X_train.std():.3f}")
     mean = X_train.mean()
     std = X_train.std()
     X_train = (X_train - mean) / std
     X_test = (X_test - mean) / std
+    print(f"After preprocessing min: {X_train.min():.3f}, max: {X_train.max():.3f}")
+    print(f"After preprocessing X_train mean: {X_train.mean():.3f}, std: {X_train.std():.3f}")
     return (
         X_train.astype(np.float32),
         Y_train.astype(np.int64),
@@ -41,7 +45,7 @@ class Linear:
     def __init__(self, in_channel, out_channel, bias=True, activation="relu"):
         # np.random.normal(0,1) was too large, causing gradient explosion
         # Xavier initialization
-        self.W = Tensor.kaiming_uniform(
+        self.W = Tensor.kaiming_normal(
             out_channel, in_channel, nonlinearity=activation, requires_grad=True
         )
         self.bias = Tensor(np.zeros(out_channel), requires_grad=True) if bias else None
@@ -119,9 +123,14 @@ def train(model, X_train, Y_train, optimizer, loss_fn, steps=10000, batch_size=1
 
 def main():
     model = MLP((784, 128, 32, 10))
+    # With SGD, the model requires preprocessing and smaller learning rate is needed
+    # but it can reach high accuracy(0,97) with SGD(0.01, momentum=0.9).
     X_train, Y_train, X_test, Y_test = preprocess(*fetch_mnist())
+    # With Adam, the model can learn without preprocessing.
+    #X_train, Y_train, X_test, Y_test = fetch_mnist()
 
-    optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
+    #optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
+    optimizer = Adam(model.parameters(), lr=0.001, b1=0.9, b2=0.999)
 
     # Negative log likelihood loss
     def loss_fn(y_pred, y):
