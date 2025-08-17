@@ -71,6 +71,22 @@ class Tensor:
     def __truediv__(self, other: "Tensor" | int | float) -> "Tensor":
         return self * (other**-1)
 
+    # self < other
+    def __lt__(self, other: "Tensor" | int | float) -> "Tensor":
+        return Tensor(self.data < (other.data if isinstance(other, Tensor) else other))
+
+    # self <= other
+    def __le__(self, other: "Tensor" | int | float) -> "Tensor":
+        return Tensor(self.data <= (other.data if isinstance(other, Tensor) else other))
+
+    # self > other
+    def __gt__(self, other: "Tensor" | int | float) -> "Tensor":
+        return Tensor(self.data > (other.data if isinstance(other, Tensor) else other))
+
+    # self >= other
+    def __ge__(self, other: "Tensor" | int | float) -> "Tensor":
+        return Tensor(self.data >= (other.data if isinstance(other, Tensor) else other))
+
     def assign(self, other: "Tensor" | int | float) -> "Tensor":
         if other.__class__ is not Tensor:
             other = Tensor(other)
@@ -125,7 +141,7 @@ class Tensor:
         return Tensor(n.data, **kwargs)  # to ensure is_leaf=True
 
     @staticmethod
-    def uniform(*shape: int, low: float = 0.0, high: float = 0.0, **kwargs) -> "Tensor":
+    def uniform(*shape: int, low: float = 0.0, high: float = 1.0, **kwargs) -> "Tensor":
         u = ((high - low) * Tensor.rand(*shape, **kwargs)) + low
         return Tensor(u.data, **kwargs)  # to ensure is_leaf=True
 

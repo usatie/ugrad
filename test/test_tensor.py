@@ -52,6 +52,21 @@ def test_t():
     c.assert_all()
 
 
+def test_lt():
+    a = ComparableTensor(
+        np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32), requires_grad=True
+    )
+    b = ComparableTensor(
+        np.array([[2, 2, 3], [4, 5, 7]], dtype=np.float32), requires_grad=True
+    )
+    (a < b).assert_all()
+    (a <= b).assert_all()
+    (a > b).assert_all()
+    (a < 2).assert_all()
+    (a <= 2).assert_all()
+    (a > 2).assert_all()
+
+
 def test_relu():
     a = ComparableTensor(
         np.arange(0, 6, dtype=np.double).reshape(2, 3), requires_grad=True
