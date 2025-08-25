@@ -15,12 +15,38 @@ class View:
         )
         return index
 
+    @property
+    def ndim(self):
+        return len(self.shape)
+
     def reshape(self, *shape: int):
         # TODO: Check contiguous (not always reshape-able)
         assert prod(self.shape) == prod(shape)
         total = prod(self.shape)
         new_strides = tuple((total := total // sh) for sh in shape)
         return View(shape, new_strides, self.offset)
+
+    def _transpose(self, axes=None):
+        if axes is None:
+            axes = range(self.ndim)[::-1]
+        if len(axes) != self.ndim:
+            raise ValueError("axes don't match array")
+        shape, strides = list(self.shape), list(self.strides)
+        for dim0, dim1 in enumerate(axes):
+            if dim0 >= dim1:
+                continue
+            shape[dim0], shape[dim1] = shape[dim1], shape[dim0]
+            strides[dim0], strides[dim1] = strides[dim1], strides[dim0]
+        return View(tuple(shape), tuple(strides), self.offset)
+
+    def transpose(self, *axes):
+        # Let's transpose first and second dim
+        if len(axes) == 0:
+            return self._transpose(None)
+        elif isinstance(axes[0], tuple):
+            return self._transpose(axes[0])
+        else:
+            return self._transpose(axes)
 
 class Tensor:
     def __init__(
@@ -57,28 +83,8 @@ class Tensor:
     def reshape(self, *shape: int):
         return Tensor(self.data, self.view.reshape(*shape))
 
-    def _transpose(self, axes=None):
-        if axes is None:
-            axes = range(self.ndim)[::-1]
-        if len(axes) != self.ndim:
-            raise ValueError("axes don't match array")
-        shape, strides = list(self.shape), list(self.view.strides)
-        for dim0, dim1 in enumerate(axes):
-            if dim0 >= dim1:
-                continue
-            shape[dim0], shape[dim1] = shape[dim1], shape[dim0]
-            strides[dim0], strides[dim1] = strides[dim1], strides[dim0]
-
-        return Tensor(self.data, View(tuple(shape), tuple(strides), self.view.offset))
-
     def transpose(self, *axes):
-        # Let's transpose first and second dim
-        if len(axes) == 0:
-            return self._transpose(None)
-        elif isinstance(axes[0], tuple):
-            return self._transpose(axes[0])
-        else:
-            return self._transpose(axes)
+        return Tensor(self.data, self.view.transpose(*axes))
 
     def _getindex(self, idx):
         return self.view._getindex(idx)
