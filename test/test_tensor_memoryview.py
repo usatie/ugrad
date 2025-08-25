@@ -1,20 +1,21 @@
 import numpy as np
 from math import prod
 
+
 class Tensor:
     def __init__(
-            self,
-            mv: memoryview,
-            shape: tuple[int] = None,
-            strides: tuple[int] = None,
-            offset: int = 0
-            ):
-        self.data = mv.cast('B').cast(mv.format)
+        self,
+        mv: memoryview,
+        shape: tuple[int] = None,
+        strides: tuple[int] = None,
+        offset: int = 0,
+    ):
+        self.data = mv.cast("B").cast(mv.format)
         if shape is None:
             self._shape = mv.shape
         else:
             # not necessarily match, especially when sliced
-            #assert prod(shape) == prod(mv.shape)
+            # assert prod(shape) == prod(mv.shape)
             self._shape = shape
         if strides is None:
             self._strides = mv.strides
@@ -30,6 +31,7 @@ class Tensor:
     def tolist(self) -> list:
         l = []
         from itertools import product
+
         for idx in product(*(range(sh) for sh in self.shape)):
             l.append(self[idx])
         return l
@@ -53,29 +55,38 @@ class Tensor:
         new_strides = tuple((total := total // sh) for sh in shape)
         return Tensor(self.data, shape, new_strides, self.offset)
 
-    def transpose(self):
-        # Let's transpose first and second dim
-        i, j = 0, 1
-        shape, strides = [], []
-        for idx, (sh, st) in enumerate(zip(self.shape, self.strides)):
-            if idx == i:
-                shape.append(self.shape[j])
-                strides.append(self.strides[j])
-            elif idx == j:
-                shape.append(self.shape[i])
-                strides.append(self.strides[i])
-            else:
-                shape.append(sh)
-                strides.append(st)
+    def _transpose(self, axes=None):
+        if axes is None:
+            axes = range(self.ndim)[::-1]
+        if len(axes) != self.ndim:
+            raise ValueError("axes don't match array")
+        shape, strides = list(self.shape), list(self.strides)
+        for dim0, dim1 in enumerate(axes):
+            if dim0 >= dim1:
+                continue
+            shape[dim0], shape[dim1] = shape[dim1], shape[dim0]
+            strides[dim0], strides[dim1] = strides[dim1], strides[dim0]
 
         return Tensor(self.data, tuple(shape), tuple(strides), self.offset)
 
+    def transpose(self, *axes):
+        # Let's transpose first and second dim
+        if len(axes) == 0:
+            return self._transpose(None)
+        elif isinstance(axes[0], tuple):
+            return self._transpose(axes[0])
+        else:
+            return self._transpose(axes)
+
     def _getindex(self, idx):
-        index = (self.offset + sum((sh * i for sh, i in zip(self.strides, idx)))) // self.data.itemsize
+        index = (
+            self.offset + sum((sh * i for sh, i in zip(self.strides, idx)))
+        ) // self.data.itemsize
         return index
 
     def __getitem__(self, idx):
-        if isinstance(idx, int): idx = (idx, )
+        if isinstance(idx, int):
+            idx = (idx,)
         assert type(idx) == tuple
         assert len(idx) <= self.ndim
         if len(idx) == len(self.shape) and all(isinstance(x, int) for x in idx):
@@ -89,11 +100,14 @@ class Tensor:
                 if i < 0 or i >= sh:
                     raise IndexError("Index out of bound")
                 offset += i * st
-            return Tensor(self.data, self.shape[len(idx):], self.strides[len(idx):], offset)
+            return Tensor(
+                self.data, self.shape[len(idx) :], self.strides[len(idx) :], offset
+            )
 
     @property
     def T(self):
         return self.transpose()
+
 
 def test_constructor():
     a = np.arange(0, 12).reshape(3, 4)
@@ -102,10 +116,12 @@ def test_constructor():
     assert b.shape == (3, 4)
     assert b.strides == (32, 8)
 
+
 def _assert_all(n, t):
     assert n.shape == t.shape
     assert n.strides == t.strides
     from itertools import product
+
     for idx in product(*(range(sh) for sh in n.shape)):
         assert n[idx] == t[idx]
 
@@ -113,12 +129,15 @@ def _assert_all(n, t):
         for idx in range(n.shape[0]):
             _assert_all(n[idx], t[idx])
 
+
 def _assert_except(n, t, f, exctype):
     import pytest
+
     with pytest.raises(exctype):
         f(n)
     with pytest.raises(exctype):
         f(t)
+
 
 def test_getitem():
     # 1D
@@ -151,6 +170,7 @@ def test_getitem():
     _assert_except(a, b, lambda x: x[0][3], IndexError)
     _assert_except(a, b, lambda x: x[0, 4], IndexError)
 
+
 def test_reshape():
     a = np.arange(0, 12)
     b = Tensor(a.data)
@@ -161,8 +181,15 @@ def test_reshape():
 
 
 def test_transpose():
-    a = np.arange(0, 12).reshape(3,4)     
+    a = np.arange(0, 12).reshape(3, 4)
     b = Tensor(a.data)
     _assert_all(a, b)
     _assert_all(a.transpose(), b.transpose())
     _assert_all(a.T, b.T)
+
+    a = np.arange(0, 12).reshape(2, 2, 3)
+    b = Tensor(a.data)
+    _assert_all(a.transpose(), b.transpose())
+    _assert_all(a.transpose((0, 2, 1)), b.transpose((0, 2, 1)))
+    _assert_all(a.transpose(0, 2, 1), b.transpose(0, 2, 1))
+    _assert_except(a, b, lambda x: x.transpose((0, 1)), ValueError)
