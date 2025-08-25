@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 from math import prod
 
+
 def strides_for_shape(shape: tuple[int, ...]) -> tuple[int, ...]:
     strides = []
     st = 1
@@ -12,7 +13,8 @@ def strides_for_shape(shape: tuple[int, ...]) -> tuple[int, ...]:
     # TODO: Canonicalize
     return tuple(reversed(strides))
 
-@dataclass
+
+@dataclass(frozen=True)
 class View:
     shape: tuple[int]
     strides: tuple[int]
@@ -62,6 +64,9 @@ class View:
             return self._transpose(axes)
 
     def slice(self, idx: tuple[int]):
+        # TODO: Support slice object
+        # Assume idx is a integer
+        assert all(isinstance(i, int) for i in idx)
         offset = self.offset
         for i, st, sh in zip(idx, self.strides, self.shape):
             if i < 0 or i >= sh:
@@ -70,24 +75,44 @@ class View:
         return View(self.shape[len(idx) :], self.strides[len(idx) :], offset)
 
 
+@dataclass(frozen=True)
+class ShapeTracker:
+    views: tuple[View]
+
+    @property
+    def view(self):
+        return self.views[-1]
+
+    def reshape(self, *shape: int):
+        if (view := self.view.reshape(*shape)) is not None:
+            views = self.views[:-1] + (view,)
+        else:
+            raise NotImplementedError
+        return ShapeTracker(views)
+
+    def slice(self, idx):
+        return ShapeTracker(self.views[:-1] + (self.view.slice(idx),))
+
+    def transpose(self, *axes):
+        return ShapeTracker(self.views[:-1] + (self.view.transpose(*axes),))
+
+
 class Tensor:
     def __init__(
         self,
         mv: memoryview,
-        view: Optional[View] = None,
+        st: ShapeTracker = None,
     ):
         self.data = mv.cast("B").cast(mv.format)
-        if view is None:
+        if st is None:
             shape = mv.shape
             strides = tuple(st // mv.itemsize for st in mv.strides)
-            views = [View(shape, strides, 0)]
-        else:
-            views = [view]
-        self.views = views
+            st = ShapeTracker((View(shape, strides, 0),))
+        self.st = st
 
     @property
     def view(self):
-        return self.views[0]
+        return self.st.views[-1]
 
     def __repr__(self) -> str:
         return f"Tensor(data={self.tolist()}, shape={self.shape}, strides={self.strides}, offset={self.offset})"
@@ -109,12 +134,14 @@ class Tensor:
         return len(self.shape)
 
     def reshape(self, *shape: int):
-        if (view := self.view.reshape(*shape)) is None:
-            raise NotImplementedError
-        return Tensor(self.data, view)
+        return Tensor(self.data, self.st.reshape(*shape))
 
     def transpose(self, *axes):
-        return Tensor(self.data, self.view.transpose(*axes))
+        return Tensor(self.data, self.st.transpose(*axes))
+
+    @property
+    def T(self):
+        return self.transpose()
 
     def __getitem__(self, idx):
         if isinstance(idx, int):
@@ -125,13 +152,7 @@ class Tensor:
             index = self.view.getindex(idx)
             return self.data[index]
         else:
-            # TODO: Support slices
-            # Assume idx is a integer
-            return Tensor(self.data, self.view.slice(idx))
-
-    @property
-    def T(self):
-        return self.transpose()
+            return Tensor(self.data, self.st.slice(idx))
 
 
 def test_constructor():
