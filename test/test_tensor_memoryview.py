@@ -20,6 +20,10 @@ class View:
     strides: tuple[int]
     offset: int
 
+    @staticmethod
+    def create(shape: tuple[int]):
+        return View(shape, strides_for_shape(shape), 0)
+
     def getindex(self, idx):
         index = self.offset + sum((sh * i for sh, i in zip(self.strides, idx)))
         return index
@@ -85,10 +89,9 @@ class ShapeTracker:
 
     def reshape(self, *shape: int):
         if (view := self.view.reshape(*shape)) is not None:
-            views = self.views[:-1] + (view,)
+            return ShapeTracker(self.views[:-1] + (view,))
         else:
-            raise NotImplementedError
-        return ShapeTracker(views)
+            return ShapeTracker(self.views + (View.create(shape),))
 
     def slice(self, idx):
         return ShapeTracker(self.views[:-1] + (self.view.slice(idx),))
@@ -115,7 +118,7 @@ class Tensor:
         return self.st.views[-1]
 
     def __repr__(self) -> str:
-        return f"Tensor(data={self.tolist()}, shape={self.shape}, strides={self.strides}, offset={self.offset})"
+        return f"Tensor(data={self.tolist()}, shape={self.shape})"
 
     def tolist(self) -> list:
         l = []
