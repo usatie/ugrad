@@ -3,24 +3,37 @@ from dataclasses import dataclass
 from typing import Optional
 from math import prod
 
+def strides_for_shape(shape: tuple[int, ...]) -> tuple[int, ...]:
+    strides = []
+    st = 1
+    for sh in reversed(shape):
+        strides.append(st)
+        st *= sh
+    # TODO: Canonicalize
+    return tuple(reversed(strides))
+
 @dataclass
 class View:
     shape: tuple[int]
     strides: tuple[int]
     offset: int
 
-    def _getindex(self, idx):
-        index = (
-            self.offset + sum((sh * i for sh, i in zip(self.strides, idx)))
-        )
+    def getindex(self, idx):
+        index = self.offset + sum((sh * i for sh, i in zip(self.strides, idx)))
         return index
 
     @property
     def ndim(self):
         return len(self.shape)
 
+    @property
+    def contiguous(self):
+        return self.strides == strides_for_shape(self.shape)
+
     def reshape(self, *shape: int):
-        # TODO: Check contiguous (not always reshape-able)
+        # Check contiguous (not always reshape-able)
+        if not self.contiguous:
+            return None
         assert prod(self.shape) == prod(shape)
         total = prod(self.shape)
         new_strides = tuple((total := total // sh) for sh in shape)
@@ -48,6 +61,15 @@ class View:
         else:
             return self._transpose(axes)
 
+    def slice(self, idx: tuple[int]):
+        offset = self.offset
+        for i, st, sh in zip(idx, self.strides, self.shape):
+            if i < 0 or i >= sh:
+                raise IndexError("Index out of bound")
+            offset += i * st
+        return View(self.shape[len(idx) :], self.strides[len(idx) :], offset)
+
+
 class Tensor:
     def __init__(
         self,
@@ -58,8 +80,14 @@ class Tensor:
         if view is None:
             shape = mv.shape
             strides = tuple(st // mv.itemsize for st in mv.strides)
-            view = View(shape, strides, 0)
-        self.view = view
+            views = [View(shape, strides, 0)]
+        else:
+            views = [view]
+        self.views = views
+
+    @property
+    def view(self):
+        return self.views[0]
 
     def __repr__(self) -> str:
         return f"Tensor(data={self.tolist()}, shape={self.shape}, strides={self.strides}, offset={self.offset})"
@@ -81,13 +109,12 @@ class Tensor:
         return len(self.shape)
 
     def reshape(self, *shape: int):
-        return Tensor(self.data, self.view.reshape(*shape))
+        if (view := self.view.reshape(*shape)) is None:
+            raise NotImplementedError
+        return Tensor(self.data, view)
 
     def transpose(self, *axes):
         return Tensor(self.data, self.view.transpose(*axes))
-
-    def _getindex(self, idx):
-        return self.view._getindex(idx)
 
     def __getitem__(self, idx):
         if isinstance(idx, int):
@@ -95,19 +122,12 @@ class Tensor:
         assert type(idx) == tuple
         assert len(idx) <= self.ndim
         if len(idx) == len(self.shape) and all(isinstance(x, int) for x in idx):
-            index = self._getindex(idx)
+            index = self.view.getindex(idx)
             return self.data[index]
         else:
             # TODO: Support slices
             # Assume idx is a integer
-            offset = self.view.offset
-            for i, st, sh in zip(idx, self.view.strides, self.shape):
-                if i < 0 or i >= sh:
-                    raise IndexError("Index out of bound")
-                offset += i * st
-            return Tensor(
-                self.data, View(self.shape[len(idx) :], self.view.strides[len(idx) :], offset)
-            )
+            return Tensor(self.data, self.view.slice(idx))
 
     @property
     def T(self):
@@ -181,6 +201,9 @@ def test_reshape():
     _assert_all(a.reshape(3, 4), b.reshape(3, 4))
     _assert_all(a.reshape(2, 3, 2), b.reshape(2, 3, 2))
     _assert_all(a.reshape(3, 4).reshape(12), b.reshape(3, 4).reshape(12))
+
+    # Non contiguous reshape
+    # _assert_all(a.reshape(3, 4).T.reshape(4, 3), b.reshape(3, 4).T.reshape(4, 3))
 
 
 def test_transpose():
