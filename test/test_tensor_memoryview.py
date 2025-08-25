@@ -1,29 +1,39 @@
 import numpy as np
+from dataclasses import dataclass
+from typing import Optional
 from math import prod
 
+@dataclass
+class View:
+    shape: tuple[int]
+    strides: tuple[int]
+    offset: int
+
+    def _getindex(self, idx):
+        index = (
+            self.offset + sum((sh * i for sh, i in zip(self.strides, idx)))
+        )
+        return index
+
+    def reshape(self, *shape: int):
+        # TODO: Check contiguous (not always reshape-able)
+        assert prod(self.shape) == prod(shape)
+        total = prod(self.shape)
+        new_strides = tuple((total := total // sh) for sh in shape)
+        return View(shape, new_strides, self.offset)
 
 class Tensor:
     def __init__(
         self,
         mv: memoryview,
-        shape: tuple[int] = None,
-        strides: tuple[int] = None,
-        offset: int = 0,
+        view: Optional[View] = None,
     ):
         self.data = mv.cast("B").cast(mv.format)
-        if shape is None:
-            self._shape = mv.shape
-        else:
-            # not necessarily match, especially when sliced
-            # assert prod(shape) == prod(mv.shape)
-            self._shape = shape
-        if strides is None:
-            self._strides = mv.strides
-        else:
-            # TODO: Check validity of strides
-            assert len(self._shape) == len(strides)
-            self._strides = strides
-        self.offset = offset
+        if view is None:
+            shape = mv.shape
+            strides = tuple(st // mv.itemsize for st in mv.strides)
+            view = View(shape, strides, 0)
+        self.view = view
 
     def __repr__(self) -> str:
         return f"Tensor(data={self.tolist()}, shape={self.shape}, strides={self.strides}, offset={self.offset})"
@@ -38,36 +48,28 @@ class Tensor:
 
     @property
     def shape(self) -> tuple[int]:
-        return self._shape
-
-    @property
-    def strides(self) -> tuple[int]:
-        return self._strides
+        return self.view.shape
 
     @property
     def ndim(self) -> int:
         return len(self.shape)
 
     def reshape(self, *shape: int):
-        # TODO: Check contiguous (not always reshape-able)
-        assert prod(self.shape) == prod(shape)
-        total = self.data.nbytes
-        new_strides = tuple((total := total // sh) for sh in shape)
-        return Tensor(self.data, shape, new_strides, self.offset)
+        return Tensor(self.data, self.view.reshape(*shape))
 
     def _transpose(self, axes=None):
         if axes is None:
             axes = range(self.ndim)[::-1]
         if len(axes) != self.ndim:
             raise ValueError("axes don't match array")
-        shape, strides = list(self.shape), list(self.strides)
+        shape, strides = list(self.shape), list(self.view.strides)
         for dim0, dim1 in enumerate(axes):
             if dim0 >= dim1:
                 continue
             shape[dim0], shape[dim1] = shape[dim1], shape[dim0]
             strides[dim0], strides[dim1] = strides[dim1], strides[dim0]
 
-        return Tensor(self.data, tuple(shape), tuple(strides), self.offset)
+        return Tensor(self.data, View(tuple(shape), tuple(strides), self.view.offset))
 
     def transpose(self, *axes):
         # Let's transpose first and second dim
@@ -79,10 +81,7 @@ class Tensor:
             return self._transpose(axes)
 
     def _getindex(self, idx):
-        index = (
-            self.offset + sum((sh * i for sh, i in zip(self.strides, idx)))
-        ) // self.data.itemsize
-        return index
+        return self.view._getindex(idx)
 
     def __getitem__(self, idx):
         if isinstance(idx, int):
@@ -95,13 +94,13 @@ class Tensor:
         else:
             # TODO: Support slices
             # Assume idx is a integer
-            offset = self.offset
-            for i, st, sh in zip(idx, self.strides, self.shape):
+            offset = self.view.offset
+            for i, st, sh in zip(idx, self.view.strides, self.shape):
                 if i < 0 or i >= sh:
                     raise IndexError("Index out of bound")
                 offset += i * st
             return Tensor(
-                self.data, self.shape[len(idx) :], self.strides[len(idx) :], offset
+                self.data, View(self.shape[len(idx) :], self.view.strides[len(idx) :], offset)
             )
 
     @property
@@ -114,12 +113,10 @@ def test_constructor():
     b = Tensor(a.data)
 
     assert b.shape == (3, 4)
-    assert b.strides == (32, 8)
 
 
 def _assert_all(n, t):
     assert n.shape == t.shape
-    assert n.strides == t.strides
     from itertools import product
 
     for idx in product(*(range(sh) for sh in n.shape)):
