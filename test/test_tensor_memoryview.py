@@ -146,15 +146,26 @@ class Tensor:
         self.st = st
 
     def __repr__(self) -> str:
-        return f"Tensor(data={self.tolist()}, shape={self.shape})"
+        def _print(lst, level=0):
+            if not isinstance(lst, list):
+                return str(lst)
+            indent = "  " * level
+            if all(not isinstance(i, list) for i in lst):
+                return "[" + ", ".join(str(i) for i in lst) + "]"
+            else:
+                inner = ",\n".join(
+                    indent + "  " + _print(i, level + 1) for i in lst
+                )
+                return "[\n" + inner + "\n" + indent + "]"
+        return f"Tensor(data={_print(self.tolist())}, shape={self.shape})"
 
     def tolist(self) -> list:
-        l = []
-        from itertools import product
-
-        for idx in product(*(range(sh) for sh in self.shape)):
-            l.append(self[idx])
-        return l
+        def build_list(shape: tuple[int,...], index_prefix: tuple[int,...] = ()):
+            if len(shape) == 1:
+                return [self[index_prefix + (i,)] for i in range(shape[0])]
+            else:
+                return [build_list(shape[1:], index_prefix + (i,)) for i in range(shape[0])]
+        return build_list(self.shape)
 
     @property
     def shape(self) -> tuple[int]:
