@@ -177,9 +177,11 @@ class Tensor:
     def __getitem__(self, idx: int | tuple[int, ...]):
         if isinstance(idx, int):
             idx = (idx,)
-        assert type(idx) == tuple
-        assert len(idx) <= self.ndim
-        if len(idx) == len(self.shape) and all(isinstance(x, int) for x in idx):
+        if any(not isinstance(i, int) for i in idx):
+            raise TypeError("Only integer indexing is supported")
+        if len(idx) > self.ndim:
+            raise IndexError("Too many indices for tensor")
+        if len(idx) == len(self.shape):
             index = self.st.get_index(idx)
             return self.data[index]
         else:
