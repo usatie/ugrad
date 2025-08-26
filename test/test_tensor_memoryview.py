@@ -10,25 +10,31 @@ def strides_for_shape(shape: tuple[int, ...]) -> tuple[int, ...]:
     for sh in reversed(shape):
         strides.append(st)
         st *= sh
-    # TODO: Canonicalize
-    return tuple(reversed(strides))
+    strides = tuple(reversed(strides))
+    return canonicalize_strides(strides, shape)
+
+
+def canonicalize_strides(
+    strides: tuple[int, ...], shape: tuple[int, ...]
+) -> tuple[int, ...]:
+    return tuple(0 if sh == 1 else st for sh, st in zip(shape, strides))
 
 
 @dataclass(frozen=True)
 class View:
-    shape: tuple[int]
-    strides: tuple[int]
+    shape: tuple[int, ...]
+    strides: tuple[int, ...]
     offset: int
 
     @staticmethod
-    def create(shape: tuple[int]):
+    def create(shape: tuple[int, ...]) -> "View":
         return View(shape, strides_for_shape(shape), 0)
 
-    def get_index(self, indices: tuple[int]) -> int:
+    def get_index(self, indices: tuple[int, ...]) -> int:
         index = self.offset + sum((sh * i for sh, i in zip(self.strides, indices)))
         return index
 
-    def get_indices(self, index: int) -> tuple[int]:
+    def get_indices(self, index: int) -> tuple[int, ...]:
         """
         e.g. shape: (2, 3, 4)
         [[[ 0,  1,  2,  3],
@@ -39,44 +45,38 @@ class View:
           [16, 17, 18, 19],
           [20, 21, 22, 23]]]
         """
-
         indices = []
+        index -= self.offset
         for sh in reversed(self.shape):
             indices.append(index % sh)
             index = index // sh
         return tuple(reversed(indices))
 
     @property
-    def ndim(self):
+    def ndim(self) -> int:
         return len(self.shape)
 
     @property
-    def contiguous(self):
+    def contiguous(self) -> bool:
         return self.strides == strides_for_shape(self.shape)
 
-    def reshape(self, *shape: int):
+    def reshape(self, *shape: int) -> Optional["View"]:
         # Check contiguous (not always reshape-able)
         if not self.contiguous:
             return None
         assert prod(self.shape) == prod(shape)
-        total = prod(self.shape)
-        new_strides = tuple((total := total // sh) for sh in shape)
-        return View(shape, new_strides, self.offset)
+        return View(shape, strides_for_shape(shape), self.offset)
 
-    def _transpose(self, axes=None):
+    def _transpose(self, axes: Optional[tuple[int, ...]] = None) -> "View":
         if axes is None:
-            axes = range(self.ndim)[::-1]
+            axes = tuple(range(self.ndim)[::-1])
         if len(axes) != self.ndim:
             raise ValueError("axes don't match array")
-        shape, strides = list(self.shape), list(self.strides)
-        for dim0, dim1 in enumerate(axes):
-            if dim0 >= dim1:
-                continue
-            shape[dim0], shape[dim1] = shape[dim1], shape[dim0]
-            strides[dim0], strides[dim1] = strides[dim1], strides[dim0]
-        return View(tuple(shape), tuple(strides), self.offset)
+        shape = tuple(self.shape[ax] for ax in axes)
+        strides = tuple(self.strides[ax] for ax in axes)
+        return View(shape, strides, self.offset)
 
-    def transpose(self, *axes):
+    def transpose(self, *axes: int) -> "View":
         # Let's transpose first and second dim
         if len(axes) == 0:
             return self._transpose(None)
@@ -85,7 +85,7 @@ class View:
         else:
             return self._transpose(axes)
 
-    def slice(self, idx: tuple[int]):
+    def slice(self, idx: tuple[int, ...]) -> "View":
         # TODO: Support slice object
         # Assume idx is a integer
         assert all(isinstance(i, int) for i in idx)
@@ -99,23 +99,37 @@ class View:
 
 @dataclass(frozen=True)
 class ShapeTracker:
-    views: tuple[View]
+    views: tuple[View, ...]
 
     @property
-    def view(self):
+    def view(self) -> View:
         return self.views[-1]
 
-    def reshape(self, *shape: int):
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return self.view.shape
+
+    @property
+    def ndim(self) -> int:
+        return len(self.shape)
+
+    def reshape(self, *shape: int) -> "ShapeTracker":
         if (view := self.view.reshape(*shape)) is not None:
             return ShapeTracker(self.views[:-1] + (view,))
         else:
             return ShapeTracker(self.views + (View.create(shape),))
 
-    def slice(self, idx):
+    def slice(self, idx: tuple[int, ...]) -> "ShapeTracker":
         return ShapeTracker(self.views[:-1] + (self.view.slice(idx),))
 
-    def transpose(self, *axes):
+    def transpose(self, *axes: int) -> "ShapeTracker":
         return ShapeTracker(self.views[:-1] + (self.view.transpose(*axes),))
+
+    def get_index(self, indices: tuple[int, ...]) -> int:
+        flat_index = self.views[-1].get_index(indices)
+        for view in reversed(self.views[:-1]):
+            flat_index = view.get_index(view.get_indices(flat_index))
+        return flat_index
 
 
 class Tensor:
@@ -131,10 +145,6 @@ class Tensor:
             st = ShapeTracker((View(shape, strides, 0),))
         self.st = st
 
-    @property
-    def view(self):
-        return self.st.views[-1]
-
     def __repr__(self) -> str:
         return f"Tensor(data={self.tolist()}, shape={self.shape})"
 
@@ -148,11 +158,11 @@ class Tensor:
 
     @property
     def shape(self) -> tuple[int]:
-        return self.view.shape
+        return self.st.shape
 
     @property
     def ndim(self) -> int:
-        return len(self.shape)
+        return self.st.ndim
 
     def reshape(self, *shape: int):
         return Tensor(self.data, self.st.reshape(*shape))
@@ -164,13 +174,13 @@ class Tensor:
     def T(self):
         return self.transpose()
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int | tuple[int, ...]):
         if isinstance(idx, int):
             idx = (idx,)
         assert type(idx) == tuple
         assert len(idx) <= self.ndim
         if len(idx) == len(self.shape) and all(isinstance(x, int) for x in idx):
-            index = self.view.get_index(idx)
+            index = self.st.get_index(idx)
             return self.data[index]
         else:
             return Tensor(self.data, self.st.slice(idx))
@@ -245,7 +255,19 @@ def test_reshape():
     _assert_all(a.reshape(3, 4).reshape(12), b.reshape(3, 4).reshape(12))
 
     # Non contiguous reshape
-    _assert_all(a.reshape(3, 4).T.reshape(4, 3), b.reshape(3, 4).T.reshape(4, 3))
+    _assert_all(a.reshape(3, 4).T.reshape(3, 4), b.reshape(3, 4).T.reshape(3, 4))
+    a = np.arange(0, 24)
+    b = Tensor(a.data)
+    _assert_all(
+        a.reshape(2, 3, 4).T.reshape(2, 3, 4), b.reshape(2, 3, 4).T.reshape(2, 3, 4)
+    )
+    _assert_all(
+        a.reshape(2, 3, 4).T.reshape(2, 3, 4).T.reshape(2, 3, 4),
+        b.reshape(2, 3, 4).T.reshape(2, 3, 4).T.reshape(2, 3, 4),
+    )
+    assert len(b.reshape(2, 3, 4).T.st.views) == 1
+    assert len(b.reshape(2, 3, 4).T.reshape(2, 3, 4).st.views) == 2
+    assert len(b.reshape(2, 3, 4).T.reshape(2, 3, 4).T.reshape(2, 3, 4).st.views) == 3
 
 
 def test_transpose():
@@ -264,7 +286,7 @@ def test_transpose():
 
 
 def test_view():
-    view = View((2, 3, 4), (12, 4, 1), 0)
+    view = View((2, 3, 4), (12, 4, 1), 3)
     for i in range(2):
         for j in range(3):
             for k in range(4):
