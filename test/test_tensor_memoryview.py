@@ -24,9 +24,27 @@ class View:
     def create(shape: tuple[int]):
         return View(shape, strides_for_shape(shape), 0)
 
-    def getindex(self, idx):
-        index = self.offset + sum((sh * i for sh, i in zip(self.strides, idx)))
+    def get_index(self, indices: tuple[int]) -> int:
+        index = self.offset + sum((sh * i for sh, i in zip(self.strides, indices)))
         return index
+
+    def get_indices(self, index: int) -> tuple[int]:
+        """
+        e.g. shape: (2, 3, 4)
+        [[[ 0,  1,  2,  3],
+          [ 4,  5,  6,  7],
+          [ 8,  9, 10, 11]],
+
+         [[12, 13, 14, 15],
+          [16, 17, 18, 19],
+          [20, 21, 22, 23]]]
+        """
+
+        indices = []
+        for sh in reversed(self.shape):
+            indices.append(index % sh)
+            index = index // sh
+        return tuple(reversed(indices))
 
     @property
     def ndim(self):
@@ -152,7 +170,7 @@ class Tensor:
         assert type(idx) == tuple
         assert len(idx) <= self.ndim
         if len(idx) == len(self.shape) and all(isinstance(x, int) for x in idx):
-            index = self.view.getindex(idx)
+            index = self.view.get_index(idx)
             return self.data[index]
         else:
             return Tensor(self.data, self.st.slice(idx))
@@ -227,7 +245,7 @@ def test_reshape():
     _assert_all(a.reshape(3, 4).reshape(12), b.reshape(3, 4).reshape(12))
 
     # Non contiguous reshape
-    # _assert_all(a.reshape(3, 4).T.reshape(4, 3), b.reshape(3, 4).T.reshape(4, 3))
+    _assert_all(a.reshape(3, 4).T.reshape(4, 3), b.reshape(3, 4).T.reshape(4, 3))
 
 
 def test_transpose():
@@ -243,3 +261,14 @@ def test_transpose():
     _assert_all(a.transpose((0, 2, 1)), b.transpose((0, 2, 1)))
     _assert_all(a.transpose(0, 2, 1), b.transpose(0, 2, 1))
     _assert_except(a, b, lambda x: x.transpose((0, 1)), ValueError)
+
+
+def test_view():
+    view = View((2, 3, 4), (12, 4, 1), 0)
+    for i in range(2):
+        for j in range(3):
+            for k in range(4):
+                index = view.get_index((i, j, k))
+                indices = view.get_indices(index)
+                assert (i, j, k) == indices
+                assert index == view.get_index(indices)
