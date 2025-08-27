@@ -27,14 +27,20 @@ def calculate_gain(nonlinearity: str, a: float = 0.0) -> float:
 class Tensor:
     def __init__(
         self,
-        data: NDArray[np.floating] | int | float | memoryview,
+        data: "Tensor" | NDArray[np.floating] | int | float | memoryview,
         st: ShapeTracker = None,
         is_leaf: bool = True,
         requires_grad: bool = False,
         f: Optional["Function"] = None,
     ):
-        if isinstance(data, memoryview):
-            NotImplementedError("memoryview not supported yet")
+        if isinstance(data, Tensor):
+            self.dtype = data.dtype
+            self.rawdata = data.rawdata
+            self.st = data.st
+        elif isinstance(data, memoryview):
+            self.dtype = np.dtype(data.format)
+            self.rawdata = data
+            self.st = st if st is not None else ShapeTracker.create(data.shape)
         else:
             npdata = (
                 np.array(data, dtype=np.float64)
@@ -163,17 +169,17 @@ class Tensor:
         R = (-2 * u1.log()).sqrt()
         theta = 2 * math.pi * u2
         z1 = R * theta.cos()
-        return Tensor(z1.npdata, **kwargs)  # to ensure is_leaf=True
+        return Tensor(z1, **kwargs)  # to ensure is_leaf=True
 
     @staticmethod
     def normal(*shape: int, mean: float = 0.0, std: float = 1.0, **kwargs) -> "Tensor":
         n = (std * Tensor.randn(*shape, **kwargs)) + mean
-        return Tensor(n.npdata, **kwargs)  # to ensure is_leaf=True
+        return Tensor(n, **kwargs)  # to ensure is_leaf=True
 
     @staticmethod
     def uniform(*shape: int, low: float = 0.0, high: float = 1.0, **kwargs) -> "Tensor":
         u = ((high - low) * Tensor.rand(*shape, **kwargs)) + low
-        return Tensor(u.npdata, **kwargs)  # to ensure is_leaf=True
+        return Tensor(u, **kwargs)  # to ensure is_leaf=True
 
     @staticmethod
     def xavier_uniform(*shape, gain=1.0, **kwargs) -> "Tensor":
@@ -269,7 +275,6 @@ class Tensor:
         return LogN.call(self)
 
     def unsqueeze(self, dim: int) -> "Tensor":
-        # return Tensor(np.expand_dims(self.npdata, dim))
         return Unsqueeze.call(self, dim)
 
     def log_softmax(self, dim: int) -> "Tensor":
@@ -303,8 +308,7 @@ class Tensor:
         return Conv2D.call(self, filters)
 
     def backward(self, outgrad: Optional["Tensor"] = None) -> None:
-        # print(f"[backward] self: {self.shape} ({self.npdata.dtype}), outgrad: {outgrad.shape if outgrad is not None else None} ({outgrad.npdata.dtype if outgrad is not None else None}), f: {self.f}")
-        assert outgrad is not None or self.npdata.size == 1
+        assert outgrad is not None or self.size == 1
         if self.f is None:
             return
         # Compute gradients
@@ -317,9 +321,9 @@ class Tensor:
         for t, g in zip(self.f.inputs, grads):
             if not isinstance(t, Tensor):
                 continue
-            grad = Tensor(np.zeros_like(t.npdata, dtype=np.float64))
-            if grad.npdata.shape != g.npdata.shape:
-                g = unbroadcast(g, grad.npdata.shape)
+            grad = Tensor.zeros_like(t)
+            if grad.shape != g.shape:
+                g = unbroadcast(g, grad.shape)
             grad += g
             if t.requires_grad and t.is_leaf:
                 # Update gradient
