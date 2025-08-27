@@ -7,6 +7,10 @@ from ugrad.shape.view import View
 class ShapeTracker:
     views: tuple[View, ...]
 
+    @staticmethod
+    def create(shape: tuple[int, ...]) -> "View":
+        return ShapeTracker((View.create(shape),))
+
     @property
     def view(self) -> View:
         return self.views[-1]

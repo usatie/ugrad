@@ -8,33 +8,33 @@ def test_add():
     a = Tensor(np.array([1, 2, 3]))
     b = Tensor(np.array([4, 5, 6]))
     c = a + b
-    assert np.all(np.array([5, 7, 9]) == c.data)
-    assert np.all((a + 4).data == np.array([5, 6, 7]))
-    assert np.all((4 + a).data == np.array([5, 6, 7]))
+    assert np.all(np.array([5, 7, 9]) == c.npdata)
+    assert np.all((a + 4).npdata == np.array([5, 6, 7]))
+    assert np.all((4 + a).npdata == np.array([5, 6, 7]))
 
 
 def test_sub():
     a = Tensor(np.array([5, 6, 7]))
     b = Tensor(np.array([3, 2, 1]))
     c = a - b
-    assert np.all(np.array([2, 4, 6]) == c.data)
-    assert np.all((a - 2).data == np.array([3, 4, 5]))
-    assert np.all((2 - a).data == np.array([-3, -4, -5]))
+    assert np.all(np.array([2, 4, 6]) == c.npdata)
+    assert np.all((a - 2).npdata == np.array([3, 4, 5]))
+    assert np.all((2 - a).npdata == np.array([-3, -4, -5]))
 
 
 def test_mul():
     a = Tensor(np.array([3, 4, 5]))
     b = Tensor(np.array([2, 3, 4]))
     c = a * b
-    assert np.all(np.array([6, 12, 20]) == c.data)
-    assert np.all((a * 2).data == np.array([6, 8, 10]))
-    assert np.all((2 * a).data == np.array([6, 8, 10]))
+    assert np.all(np.array([6, 12, 20]) == c.npdata)
+    assert np.all((a * 2).npdata == np.array([6, 8, 10]))
+    assert np.all((2 * a).npdata == np.array([6, 8, 10]))
 
 
 def test_neg():
     a = Tensor(np.array([1, -2, 3]))
     b = -a
-    assert np.all(np.array([-1, 2, -3]) == b.data)
+    assert np.all(np.array([-1, 2, -3]) == b.npdata)
 
 
 def test_t():
@@ -42,7 +42,9 @@ def test_t():
         np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32), requires_grad=True
     )
     b = a.t()
-    assert np.all(b.ugrad.data == np.array([[1, 4], [2, 5], [3, 6]], dtype=np.float32))
+    assert np.all(
+        b.ugrad.npdata == np.array([[1, 4], [2, 5], [3, 6]], dtype=np.float32)
+    )
     c = b * 2
     loss = c.sum()
     loss.backward()
@@ -233,64 +235,64 @@ def test_zeros_like():
 def test_randn():
     a = Tensor.randn(10, 20, 30, 40)
     assert a.shape == (10, 20, 30, 40)
-    assert abs(a.mean().data) < 0.01, "Mean should be close to 0"
-    assert abs(a.std().data - 1.0) < 0.01, "Std should be close to 1"
+    assert abs(a.mean().npdata) < 0.01, "Mean should be close to 0"
+    assert abs(a.std().npdata - 1.0) < 0.01, "Std should be close to 1"
 
 
 def test_normal():
     a = Tensor.normal(10, 20, 30, 40, mean=42.0, std=3.0)
     assert a.shape == (10, 20, 30, 40)
-    assert abs(a.mean().data - 42.0) < 0.1, "Mean should be close to 42.0"
-    assert abs(a.std().data - 3.0) < 0.1, "Std should be close to 3.0"
+    assert abs(a.mean().npdata - 42.0) < 0.1, "Mean should be close to 42.0"
+    assert abs(a.std().npdata - 3.0) < 0.1, "Std should be close to 3.0"
 
 
 def test_uniform():
     a = Tensor.uniform(10, 20, 30, 40, low=0.0, high=1.0)
     assert a.shape == (10, 20, 30, 40)
-    assert np.all(a.data >= 0.0) and np.all(
-        a.data <= 1.0
+    assert np.all(a.npdata >= 0.0) and np.all(
+        a.npdata <= 1.0
     ), "Values should be in [0.0, 1.0]"
     # How can I test the uniformity of the distribution?
-    assert abs(a.mean().data - 0.5) < 0.1, "Mean should be close to 0.5"
-    assert abs(a.std().data - 0.29) < 0.1, "Std should be close to 0.29"
+    assert abs(a.mean().npdata - 0.5) < 0.1, "Mean should be close to 0.5"
+    assert abs(a.std().npdata - 0.29) < 0.1, "Std should be close to 0.29"
     assert (
-        abs((a.data < 0.1).sum() - a.data.size * 0.1) < a.data.size * 0.01
+        abs((a.npdata < 0.1).sum() - a.npdata.size * 0.1) < a.npdata.size * 0.01
     ), "Approximately 10% of values should be < 0.1"
     assert (
-        abs((a.data < 0.2).sum() - a.data.size * 0.2) < a.data.size * 0.01
+        abs((a.npdata < 0.2).sum() - a.npdata.size * 0.2) < a.npdata.size * 0.01
     ), "Approximately 20% of values should be < 0.2"
     assert (
-        abs((a.data < 0.3).sum() - a.data.size * 0.3) < a.data.size * 0.01
+        abs((a.npdata < 0.3).sum() - a.npdata.size * 0.3) < a.npdata.size * 0.01
     ), "Approximately 30% of values should be < 0.3"
     assert (
-        abs((a.data < 0.4).sum() - a.data.size * 0.4) < a.data.size * 0.01
+        abs((a.npdata < 0.4).sum() - a.npdata.size * 0.4) < a.npdata.size * 0.01
     ), "Approximately 40% of values should be < 0.4"
     assert (
-        abs((a.data < 0.5).sum() - a.data.size * 0.5) < a.data.size * 0.01
+        abs((a.npdata < 0.5).sum() - a.npdata.size * 0.5) < a.npdata.size * 0.01
     ), "Approximately 50% of values should be < 0.5"
     assert (
-        abs((a.data < 0.6).sum() - a.data.size * 0.6) < a.data.size * 0.01
+        abs((a.npdata < 0.6).sum() - a.npdata.size * 0.6) < a.npdata.size * 0.01
     ), "Approximately 60% of values should be < 0.6"
     assert (
-        abs((a.data < 0.7).sum() - a.data.size * 0.7) < a.data.size * 0.01
+        abs((a.npdata < 0.7).sum() - a.npdata.size * 0.7) < a.npdata.size * 0.01
     ), "Approximately 70% of values should be < 0.7"
     assert (
-        abs((a.data < 0.8).sum() - a.data.size * 0.8) < a.data.size * 0.01
+        abs((a.npdata < 0.8).sum() - a.npdata.size * 0.8) < a.npdata.size * 0.01
     ), "Approximately 80% of values should be < 0.8"
     assert (
-        abs((a.data < 0.9).sum() - a.data.size * 0.9) < a.data.size * 0.01
+        abs((a.npdata < 0.9).sum() - a.npdata.size * 0.9) < a.npdata.size * 0.01
     ), "Approximately 90% of values should be < 0.9"
 
 
 def test_xavier_uniform():
     a = Tensor.xavier_uniform(10, 20, 3, 3)
     assert a.shape == (10, 20, 3, 3)
-    assert abs(a.mean().data) < 0.01, "Mean should be close to 0"
+    assert abs(a.mean().npdata) < 0.01, "Mean should be close to 0"
     fan_out = 10 * 3 * 3
     fan_in = 20 * 3 * 3
     bound = np.sqrt(6 / (fan_in + fan_out))
-    assert abs(a.data.min() + bound) < 0.01, "Min should be close to -bound"
-    assert abs(a.data.max() - bound) < 0.01, "Max should be close to bound"
+    assert abs(a.npdata.min() + bound) < 0.01, "Min should be close to -bound"
+    assert abs(a.npdata.max() - bound) < 0.01, "Max should be close to bound"
 
 
 def _test_kaiming_uniform(nonlinearity, gain):
@@ -299,11 +301,11 @@ def _test_kaiming_uniform(nonlinearity, gain):
     else:
         a = Tensor.kaiming_uniform(10, 20, 3, 3, nonlinearity=nonlinearity)
     assert a.shape == (10, 20, 3, 3)
-    assert abs(a.mean().data) < 0.01, "Mean should be close to 0"
+    assert abs(a.mean().npdata) < 0.01, "Mean should be close to 0"
     fan_in = 20 * 3 * 3
     bound = gain * np.sqrt(3 / fan_in)
-    assert abs(a.data.min() + bound) < 0.01, "Min should be close to -bound"
-    assert abs(a.data.max() - bound) < 0.01, "Max should be close to bound"
+    assert abs(a.npdata.min() + bound) < 0.01, "Min should be close to -bound"
+    assert abs(a.npdata.max() - bound) < 0.01, "Max should be close to bound"
 
 
 def test_kaiming_uniform_default():
@@ -408,15 +410,15 @@ def test_mlp():
             x.assert_all()
         # This hack is needed because we don't have torch.no_grad() like context manager yet
         l1.W.torch.data -= 0.001 * l1.W.torch.grad.data
-        l1.W.ugrad.data -= 0.001 * l1.W.ugrad.grad.data
+        l1.W.ugrad.npdata -= 0.001 * l1.W.ugrad.grad.npdata
         l1.b.torch.data -= 0.001 * l1.b.torch.grad.data
-        l1.b.ugrad.data -= 0.001 * l1.b.ugrad.grad.data
+        l1.b.ugrad.npdata -= 0.001 * l1.b.ugrad.grad.npdata
         l2.W.torch.data -= 0.001 * l2.W.torch.grad.data
-        l2.W.ugrad.data -= 0.001 * l2.W.ugrad.grad.data
+        l2.W.ugrad.npdata -= 0.001 * l2.W.ugrad.grad.npdata
         l2.b.torch.data -= 0.001 * l2.b.torch.grad.data
-        l2.b.ugrad.data -= 0.001 * l2.b.ugrad.grad.data
+        l2.b.ugrad.npdata -= 0.001 * l2.b.ugrad.grad.npdata
         l3.W.torch.data -= 0.001 * l3.W.torch.grad.data
-        l3.W.ugrad.data -= 0.001 * l3.W.ugrad.grad.data
+        l3.W.ugrad.npdata -= 0.001 * l3.W.ugrad.grad.npdata
         l3.b.torch.data -= 0.001 * l3.b.torch.grad.data
-        l3.b.ugrad.data -= 0.001 * l3.b.ugrad.grad.data
-    assert loss.ugrad.data < 10.0
+        l3.b.ugrad.npdata -= 0.001 * l3.b.ugrad.grad.npdata
+    assert loss.ugrad.npdata < 10.0

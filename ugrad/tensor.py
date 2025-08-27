@@ -5,6 +5,9 @@ from numpy.typing import NDArray
 from math import prod
 import math
 
+from ugrad.shape.shapetracker import ShapeTracker
+from ugrad.shape.view import View
+
 
 def calculate_gain(nonlinearity: str, a: float = 0.0) -> float:
     if nonlinearity == "relu":
@@ -24,21 +27,35 @@ def calculate_gain(nonlinearity: str, a: float = 0.0) -> float:
 class Tensor:
     def __init__(
         self,
-        data: NDArray[np.floating] | int | float,
+        data: NDArray[np.floating] | int | float | memoryview,
+        st: ShapeTracker = None,
         is_leaf: bool = True,
         requires_grad: bool = False,
         f: Optional["Function"] = None,
     ):
-        self.data = (
-            np.array(data, dtype=np.float64) if isinstance(data, (int, float)) else data
-        )
+        if isinstance(data, memoryview):
+            NotImplementedError("memoryview not supported yet")
+        else:
+            self.npdata = (
+                np.array(data, dtype=np.float64)
+                if isinstance(data, (int, float))
+                else data
+            )
+            mv = (
+                self.npdata.data
+                if self.npdata.flags.c_contiguous
+                else np.ascontiguousarray(self.npdata).data
+            )
+            # Ensure the memoryview is 1D
+            self.rawdata = mv.cast("B").cast(mv.format)
+            self.st = st if st is not None else ShapeTracker.create(self.npdata.shape)
         self.f = f
         self.grad: Optional[Tensor] = None
         self.is_leaf = is_leaf
         self.requires_grad = requires_grad
 
     def __repr__(self) -> str:
-        return f"Tensor(data={self.data}, grad={self.grad})"
+        return f"Tensor(npdata={self.npdata}, grad={self.grad})"
 
     def __add__(self, other: Self | int | float) -> "Tensor":
         return Add.call(self, other)
@@ -73,43 +90,51 @@ class Tensor:
 
     # self < other
     def __lt__(self, other: "Tensor" | int | float) -> "Tensor":
-        return Tensor(self.data < (other.data if isinstance(other, Tensor) else other))
+        return Tensor(
+            self.npdata < (other.npdata if isinstance(other, Tensor) else other)
+        )
 
     # self <= other
     def __le__(self, other: "Tensor" | int | float) -> "Tensor":
-        return Tensor(self.data <= (other.data if isinstance(other, Tensor) else other))
+        return Tensor(
+            self.npdata <= (other.npdata if isinstance(other, Tensor) else other)
+        )
 
     # self > other
     def __gt__(self, other: "Tensor" | int | float) -> "Tensor":
-        return Tensor(self.data > (other.data if isinstance(other, Tensor) else other))
+        return Tensor(
+            self.npdata > (other.npdata if isinstance(other, Tensor) else other)
+        )
 
     # self >= other
     def __ge__(self, other: "Tensor" | int | float) -> "Tensor":
-        return Tensor(self.data >= (other.data if isinstance(other, Tensor) else other))
+        return Tensor(
+            self.npdata >= (other.npdata if isinstance(other, Tensor) else other)
+        )
 
     def assign(self, other: "Tensor" | int | float) -> "Tensor":
         if other.__class__ is not Tensor:
             other = Tensor(other)
-        self.data = other.data
+        self.npdata = other.npdata
         return self
 
     @property
     def shape(self) -> tuple[int, ...]:
-        return self.data.shape
+        return self.npdata.shape
 
     @property
     def size(self) -> int:
-        return self.data.size
+        return self.npdata.size
 
     def detach(self) -> "Tensor":
-        return Tensor(self.data)
+        return Tensor(self.npdata)
 
     def numpy(self) -> NDArray[np.floating]:
         if self.requires_grad:
             raise RuntimeError(
                 "Can't call numpy() on Tensor that requires grad. Use tensor.detach().numpy() instead."
             )
-        return self.data
+        return self.npdata
 
     @staticmethod
     def zeros(*shape: int | tuple[int]) -> "Tensor":
@@ -133,17 +158,17 @@ class Tensor:
         R = (-2 * u1.log()).sqrt()
         theta = 2 * math.pi * u2
         z1 = R * theta.cos()
-        return Tensor(z1.data, **kwargs)  # to ensure is_leaf=True
+        return Tensor(z1.npdata, **kwargs)  # to ensure is_leaf=True
 
     @staticmethod
     def normal(*shape: int, mean: float = 0.0, std: float = 1.0, **kwargs) -> "Tensor":
         n = (std * Tensor.randn(*shape, **kwargs)) + mean
-        return Tensor(n.data, **kwargs)  # to ensure is_leaf=True
+        return Tensor(n.npdata, **kwargs)  # to ensure is_leaf=True
 
     @staticmethod
     def uniform(*shape: int, low: float = 0.0, high: float = 1.0, **kwargs) -> "Tensor":
         u = ((high - low) * Tensor.rand(*shape, **kwargs)) + low
-        return Tensor(u.data, **kwargs)  # to ensure is_leaf=True
+        return Tensor(u.npdata, **kwargs)  # to ensure is_leaf=True
 
     @staticmethod
     def xavier_uniform(*shape, gain=1.0, **kwargs) -> "Tensor":
@@ -239,7 +264,7 @@ class Tensor:
         return LogN.call(self)
 
     def unsqueeze(self, dim: int) -> "Tensor":
-        # return Tensor(np.expand_dims(self.data, dim))
+        # return Tensor(np.expand_dims(self.npdata, dim))
         return Unsqueeze.call(self, dim)
 
     def log_softmax(self, dim: int) -> "Tensor":
@@ -273,8 +298,8 @@ class Tensor:
         return Conv2D.call(self, filters)
 
     def backward(self, outgrad: Optional["Tensor"] = None) -> None:
-        # print(f"[backward] self: {self.shape} ({self.data.dtype}), outgrad: {outgrad.shape if outgrad is not None else None} ({outgrad.data.dtype if outgrad is not None else None}), f: {self.f}")
-        assert outgrad is not None or self.data.size == 1
+        # print(f"[backward] self: {self.shape} ({self.npdata.dtype}), outgrad: {outgrad.shape if outgrad is not None else None} ({outgrad.npdata.dtype if outgrad is not None else None}), f: {self.f}")
+        assert outgrad is not None or self.npdata.size == 1
         if self.f is None:
             return
         # Compute gradients
@@ -287,9 +312,9 @@ class Tensor:
         for t, g in zip(self.f.inputs, grads):
             if not isinstance(t, Tensor):
                 continue
-            grad = Tensor(np.zeros_like(t.data, dtype=np.float64))
-            if grad.data.shape != g.data.shape:
-                g = unbroadcast(g, grad.data.shape)
+            grad = Tensor(np.zeros_like(t.npdata, dtype=np.float64))
+            if grad.npdata.shape != g.npdata.shape:
+                g = unbroadcast(g, grad.npdata.shape)
             grad += g
             if t.requires_grad and t.is_leaf:
                 # Update gradient
@@ -305,7 +330,7 @@ class Tensor:
 # x    [[1,1],[1,1]]  (2, 2)
 def unbroadcast(x: "Tensor", shape: tuple[int, ...]) -> "Tensor":
     # Assume x is broadcasted from original shape
-    out = x.data.copy()
+    out = x.npdata.copy()
     i = 1
     while out.shape != shape and i <= len(out.shape):
         dim = out.shape[-i]
@@ -341,8 +366,8 @@ class Function:
 # mypy: disable-error-code="override"
 class Add(Function):
     def forward(self, x: "Tensor", y: int | float | "Tensor") -> NDArray[np.floating]:
-        other = y.data if isinstance(y, Tensor) else y
-        return x.data + other
+        other = y.npdata if isinstance(y, Tensor) else y
+        return x.npdata + other
 
     def backward(self, out_grad: "Tensor") -> tuple["Tensor", "Tensor"]:
         return out_grad, out_grad
@@ -350,7 +375,7 @@ class Add(Function):
 
 class Neg(Function):
     def forward(self, x: "Tensor") -> NDArray[np.floating] | int | float:
-        return -x.data
+        return -x.npdata
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         return -out_grad
@@ -359,14 +384,14 @@ class Neg(Function):
 class Mul(Function):
     def forward(self, x: "Tensor", y: int | float | "Tensor") -> NDArray[np.floating]:
 
-        other = y.data if isinstance(y, Tensor) else y
-        return x.data * other
+        other = y.npdata if isinstance(y, Tensor) else y
+        return x.npdata * other
 
     def backward(self, out_grad: "Tensor") -> tuple["Tensor", "Tensor"]:
         x, y = self.inputs
-        other = y.data if isinstance(y, Tensor) else y
-        x_grad = Tensor(out_grad.data * other)
-        y_grad = Tensor(out_grad.data * x.data)
+        other = y.npdata if isinstance(y, Tensor) else y
+        x_grad = Tensor(out_grad.npdata * other)
+        y_grad = Tensor(out_grad.npdata * x.npdata)
         return x_grad, y_grad
 
 
@@ -375,7 +400,7 @@ class Matmul(Function):
         # x (2, 3)
         # y (3, 4)
         # out (2, 4)
-        out = x.data.dot(y.data)
+        out = x.npdata.dot(y.npdata)
         return out
 
     def backward(self, out_grad: "Tensor") -> tuple["Tensor", "Tensor"]:
@@ -383,19 +408,19 @@ class Matmul(Function):
         # y (3, 4)
         x, y = self.inputs
         # out_grad (2, 4)
-        x_grad = Tensor(out_grad.data.dot(y.data.transpose()))
-        y_grad = Tensor(x.data.transpose().dot(out_grad.data))
+        x_grad = Tensor(out_grad.npdata.dot(y.npdata.transpose()))
+        y_grad = Tensor(x.npdata.transpose().dot(out_grad.npdata))
         return x_grad, y_grad
 
 
 class Pow(Function):
     def forward(self, x: "Tensor", n: int | float) -> NDArray[np.floating]:
-        return x.data**n
+        return x.npdata**n
 
     # x^n -> n * x^(n-1)
     def backward(self, out_grad: "Tensor") -> "Tensor":
         x, n = self.inputs
-        x_grad = Tensor((n * (x.data ** (n - 1))) * out_grad.data)
+        x_grad = Tensor((n * (x.npdata ** (n - 1))) * out_grad.npdata)
         return x_grad
 
 
@@ -404,14 +429,14 @@ class Sum(Function):
         self, x: "Tensor", dim: Optional[int], keepdim: bool
     ) -> NDArray[np.floating] | int | float:
         if dim is None:
-            out = x.data.sum(keepdims=keepdim)
+            out = x.npdata.sum(keepdims=keepdim)
             return out
         else:
-            return x.data.sum(dim, keepdims=keepdim)
+            return x.npdata.sum(dim, keepdims=keepdim)
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         (x, dim, keepdim) = self.inputs
-        out = Tensor(np.zeros_like(x.data))
+        out = Tensor(np.zeros_like(x.npdata))
         if dim is not None:
             if not keepdim:
                 return out + out_grad.unsqueeze(dim)  # let numpy broadcast
@@ -423,65 +448,65 @@ class Sum(Function):
 
 class Unsqueeze(Function):
     def forward(self, x: "Tensor", dim: int) -> NDArray[np.floating]:
-        return np.expand_dims(x.data, dim)
+        return np.expand_dims(x.npdata, dim)
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         (x, dim) = self.inputs
-        return Tensor(out_grad.data.squeeze(dim))
+        return Tensor(out_grad.npdata.squeeze(dim))
 
 
 class Transpose(Function):
     def forward(self, x: "Tensor") -> NDArray[np.floating]:
-        return x.data.transpose()
+        return x.npdata.transpose()
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
-        return Tensor(out_grad.data.T)
+        return Tensor(out_grad.npdata.T)
 
 
 class ReLU(Function):
     def forward(self, x: "Tensor") -> NDArray[np.floating]:
-        out = x.data.copy()
+        out = x.npdata.copy()
         out[out < 0] = 0
         return out
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         (x,) = self.inputs
-        grad = out_grad.data.copy()
-        grad[x.data < 0] = 0
+        grad = out_grad.npdata.copy()
+        grad[x.npdata < 0] = 0
         return Tensor(grad)
 
 
 class LogN(Function):
     def forward(self, x: "Tensor") -> NDArray[np.floating]:
-        return np.log(x.data)
+        return np.log(x.npdata)
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         # y = log(x)
         # y' = 1 / x
         (x,) = self.inputs
-        return Tensor(out_grad.data / x.data)
+        return Tensor(out_grad.npdata / x.npdata)
 
 
 class Exponential(Function):
     def forward(self, x: "Tensor") -> NDArray[np.floating]:
-        self.out = np.exp(x.data)
+        self.out = np.exp(x.npdata)
         return self.out
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         # y = exp(x)
         # y' = exp(x)
-        return Tensor(out_grad.data * self.out)
+        return Tensor(out_grad.npdata * self.out)
 
 
 class Cosine(Function):
     def forward(self, x: "Tensor") -> NDArray[np.floating]:
-        return np.cos(x.data)
+        return np.cos(x.npdata)
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         # y = cos(x)
         # y' = -sin(x)
         (x,) = self.inputs
-        return Tensor(-out_grad.data * np.sin(x.data))
+        return Tensor(-out_grad.npdata * np.sin(x.npdata))
 
 
 class Conv2D(Function):
@@ -505,10 +530,10 @@ class Conv2D(Function):
                 # dimension should be ok...
                 # (N, outc, 1, 1) = (N, inc, ks, ks) ? (outc, inc, ks, ks)
                 # (N, outc, 1, 1) = (N, inc * ks * ks) x (outc, inc * ks * ks).T
-                left = x.data[:, :, j : j + kernel_size, i : i + kernel_size].reshape(
+                left = x.npdata[:, :, j : j + kernel_size, i : i + kernel_size].reshape(
                     N, -1
                 )
-                right = filters.data.reshape(out_channels, -1)
+                right = filters.npdata.reshape(out_channels, -1)
                 out[:, :, j, i] = left.dot(right.T)
         return out
 
@@ -530,12 +555,12 @@ class Conv2D(Function):
                 # 1. filter (outc, inc, ks, ks)
                 # filter(outc, inc, 1, 1) = out(N, outc, outH, outW) ? x(N, inc, outH, outW)
                 # (outc, inc, 1, 1) = (outc, N * outH * outW) x (N * outH * outW, inc)
-                left = out_grad.data.transpose(1, 0, 2, 3).reshape(out_channels, -1)
-                right = x.data.transpose(0, 2, 3, 1)[
+                left = out_grad.npdata.transpose(1, 0, 2, 3).reshape(out_channels, -1)
+                right = x.npdata.transpose(0, 2, 3, 1)[
                     :, kj : outH + kj, ki : outW + ki, :
                 ]
                 right = right.reshape(-1, in_channels)
-                filters_grad.data[:, :, kj, ki] += left.dot(right)
+                filters_grad.npdata[:, :, kj, ki] += left.dot(right)
         # 2. x
         # (N, inc, inH, inW) = (N, outc, outH, outW) ? (outc, inc, ks, ks)
         # (N, inc, 1, 1) = (N, outc, ks, ks) ? (outc, inc, ks, ks)
@@ -545,7 +570,7 @@ class Conv2D(Function):
                 for kj in range(kernel_size):
                     for ki in range(kernel_size):
                         # (N, inc, 1, 1) = (N, outc, 1, 1) x (outc, inc, 1, 1)
-                        x_grad.data[:, :, j + kj, i + ki] += out_grad.data[
+                        x_grad.npdata[:, :, j + kj, i + ki] += out_grad.npdata[
                             :, :, j, i
-                        ].dot(filters.data[:, :, kj, ki])
+                        ].dot(filters.npdata[:, :, kj, ki])
         return x_grad, filters_grad

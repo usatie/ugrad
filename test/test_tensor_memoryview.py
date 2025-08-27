@@ -6,9 +6,18 @@ from ugrad.shape.view import View
 class Tensor:
     def __init__(
         self,
-        mv: memoryview,
+        data: np.ndarray | memoryview,
         st: ShapeTracker = None,
     ):
+        if isinstance(data, np.ndarray):
+            mv = (
+                data.data
+                if data.flags.c_contiguous
+                else np.ascontiguousarray(data).data
+            )
+        elif isinstance(data, memoryview):
+            mv = data
+        # To ensure the memoryview is 1D
         self.data = mv.cast("B").cast(mv.format)
         if st is None:
             shape = mv.shape
@@ -66,6 +75,7 @@ class Tensor:
         if len(idx) > self.ndim:
             raise IndexError("Too many indices for tensor")
         if len(idx) == len(self.shape):
+            # Maybe it's dumb to make flat index, if memoryview is multi dimensional, but we ensure data is 1D
             index = self.st.get_index(idx)
             return self.data[index]
         else:
@@ -103,20 +113,20 @@ def _assert_except(n, t, f, exctype):
 def test_getitem():
     # 1D
     a = np.arange(0, 12)
-    b = Tensor(a.data)
+    b = Tensor(a)
     _assert_all(a, b)
     assert a[3] == b[3]
 
     # 2D
     a = np.arange(0, 12).reshape(3, 4)
-    b = Tensor(a.data)
+    b = Tensor(a)
     _assert_all(a, b)
     _assert_all(a[1], b[1])
     assert a[0][1] == b[0][1]
 
     # 3D
     a = np.arange(0, 12).reshape(2, 2, 3)
-    b = Tensor(a.data)
+    b = Tensor(a)
     _assert_all(a, b)
     _assert_all(a[1], b[1])
     _assert_all(a[0][1], b[0][1])
@@ -134,7 +144,7 @@ def test_getitem():
 
 def test_reshape():
     a = np.arange(0, 12)
-    b = Tensor(a.data)
+    b = Tensor(a)
     _assert_all(a, b)
     _assert_all(a.reshape(3, 4), b.reshape(3, 4))
     _assert_all(a.reshape(2, 3, 2), b.reshape(2, 3, 2))
@@ -143,7 +153,7 @@ def test_reshape():
     # Non contiguous reshape
     _assert_all(a.reshape(3, 4).T.reshape(3, 4), b.reshape(3, 4).T.reshape(3, 4))
     a = np.arange(0, 24)
-    b = Tensor(a.data)
+    b = Tensor(a)
     _assert_all(
         a.reshape(2, 3, 4).T.reshape(2, 3, 4), b.reshape(2, 3, 4).T.reshape(2, 3, 4)
     )
@@ -158,13 +168,13 @@ def test_reshape():
 
 def test_transpose():
     a = np.arange(0, 12).reshape(3, 4)
-    b = Tensor(a.data)
+    b = Tensor(a)
     _assert_all(a, b)
     _assert_all(a.transpose(), b.transpose())
     _assert_all(a.T, b.T)
 
     a = np.arange(0, 12).reshape(2, 2, 3)
-    b = Tensor(a.data)
+    b = Tensor(a)
     _assert_all(a.transpose(), b.transpose())
     _assert_all(a.transpose((0, 2, 1)), b.transpose((0, 2, 1)))
     _assert_all(a.transpose(0, 2, 1), b.transpose(0, 2, 1))
