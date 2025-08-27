@@ -120,13 +120,7 @@ class Tensor:
     def assign(self, other: "Tensor" | int | float) -> "Tensor":
         if other.__class__ is not Tensor:
             other = Tensor(other)
-        mv = (
-            other.npdata.data
-            if other.npdata.flags.c_contiguous
-            else np.ascontiguousarray(other.npdata).data
-        )
-        # Ensure the memoryview is 1D
-        self.rawdata = mv.cast("B").cast(mv.format)
+        self.rawdata = other.rawdata
         return self
 
     @property
