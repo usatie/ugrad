@@ -5,12 +5,40 @@ from helper import ComparableTensor
 
 
 def test_add():
+    # Integer addition
     a = Tensor(np.array([1, 2, 3]))
     b = Tensor(np.array([4, 5, 6]))
     c = a + b
     assert np.all(np.array([5, 7, 9]) == c.npdata)
     assert np.all((a + 4).npdata == np.array([5, 6, 7]))
     assert np.all((4 + a).npdata == np.array([5, 6, 7]))
+
+    # Float addition
+    a = Tensor(np.array([1.5, 2.5, 3.5]))
+    b = Tensor(np.array([4.2, 5.3, 6.4]))
+    c = a + b
+    assert np.all(np.array([5.7, 7.8, 9.9]) == c.npdata)
+    assert np.all((a + 4.5).npdata == np.array([6.0, 7.0, 8.0]))
+    assert np.all((4.5 + a).npdata == np.array([6.0, 7.0, 8.0]))
+
+    # 2D addition
+    a = Tensor(np.array([[1, 2], [3, 4]]))
+    b = Tensor(np.array([[5, 6], [7, 8]]))
+    c = a + b
+    assert np.all(np.array([[6, 8], [10, 12]]) == c.npdata)
+
+    # 2D addition (float)
+    a = Tensor(np.array([[1.5, 2.5], [3.5, 4.5]]))
+    b = Tensor(np.array([[5.1, 6.2], [7.3, 8.4]]))
+    c = a + b
+    assert np.all(np.array([[6.6, 8.7], [10.8, 12.9]]) == c.npdata)
+
+    # Broadcasting
+    a = Tensor(np.array([[1, 2, 3], [4, 5, 6]]))
+    b = Tensor(np.array([10, 20, 30]))
+    c = Tensor(np.array([[10], [20]]))
+    assert np.all(np.array([[11, 22, 33], [14, 25, 36]]) == (a + b).npdata)
+    assert np.all(np.array([[11, 12, 13], [24, 25, 26]]) == (a + c).npdata)
 
 
 def test_sub():

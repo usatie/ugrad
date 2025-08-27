@@ -1,3 +1,4 @@
+import pytest
 import numpy as np
 from ugrad.shape.shapetracker import ShapeTracker
 from ugrad.shape.view import View
@@ -102,7 +103,6 @@ def _assert_all(n, t):
 
 
 def _assert_except(n, t, f, exctype):
-    import pytest
 
     with pytest.raises(exctype):
         f(n)
@@ -190,3 +190,55 @@ def test_view():
                 indices = view.get_indices(index)
                 assert (i, j, k) == indices
                 assert index == view.get_index(indices)
+
+
+def _broadcast_view(x, y):
+    def pad(a, val):
+        ndim = max(x.ndim, y.ndim)
+        return (val,) * (ndim - len(a)) + a
+
+    xshape = pad(x.shape, 1)
+    yshape = pad(y.shape, 1)
+    if any(
+        xdim != 1 and ydim != 1 and xdim != ydim for xdim, ydim in zip(xshape, yshape)
+    ):
+        raise ValueError("shapes can't be broadcasted")
+    shape = tuple(max(xdim, ydim) for xdim, ydim in zip(xshape, yshape))
+    return View(shape, pad(x.strides, 0), x.offset), View(
+        shape, pad(y.strides, 0), y.offset
+    )
+
+
+def test_broadcast():
+    v1 = View((3, 1), (1, 0), 0)  # [[1], [2], [3]]
+    v2 = View((1, 4), (0, 1), 0)  # [4, 5, 6, 7]
+    bv1, bv2 = _broadcast_view(v1, v2)
+    assert bv1.shape == (3, 4)
+    assert bv1.strides == (1, 0)
+    assert bv2.shape == (3, 4)
+    assert bv2.strides == (0, 1)
+
+    v1 = View(
+        (3, 1, 5), (5, 0, 1), 0
+    )  # [[[1,2,3,4,5]], [[6,7,8,9,10]], [[11,12,13,14,15]]]
+    v2 = View((4, 1), (1, 0), 0)  # [[4], [5], [6], [7]]
+    bv1, bv2 = _broadcast_view(v1, v2)
+    assert bv1.shape == (3, 4, 5)
+    assert bv1.strides == (5, 0, 1)
+    assert bv2.shape == (3, 4, 5)
+    assert bv2.strides == (0, 1, 0)
+
+    v1 = View(
+        (2, 3, 4), (12, 4, 1), 0
+    )  # [[[1,2,3,4], [5,6,7,8], [9,10,11,12]], [[13,14,15,16], [17,18,19,20], [21,22,23,24]]]
+    v2 = View((1,), (0,), 0)  # [100]
+    bv1, bv2 = _broadcast_view(v1, v2)
+    assert bv1.shape == (2, 3, 4)
+    assert bv1.strides == (12, 4, 1)
+    assert bv2.shape == (2, 3, 4)
+    assert bv2.strides == (0, 0, 0)
+
+    v1 = View((3, 2), (2, 1), 0)  # [[1,2], [3,4], [5,6]]
+    v2 = View((2, 4), (4, 1), 0)  # [[7,8,9,10], [11,12,13,14]]
+    with pytest.raises(ValueError):
+        bv1, bv2 = _broadcast_view(v1, v2)
