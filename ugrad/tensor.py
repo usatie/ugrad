@@ -43,7 +43,7 @@ class Tensor:
             self.st = st if st is not None else ShapeTracker.create(data.shape)
         else:
             npdata = (
-                np.array(data, dtype=np.float64).reshape(1)
+                np.array(data, dtype=np.float64)
                 if isinstance(data, (int, float))
                 else data
             )
@@ -85,7 +85,9 @@ class Tensor:
 
     def tolist(self) -> list:
         def build_list(shape: tuple[int, ...], index_prefix: tuple[int, ...] = ()):
-            if len(shape) == 1:
+            if len(shape) == 0:
+                return self.rawdata[0]
+            elif len(shape) == 1:
                 return [self[index_prefix + (i,)] for i in range(shape[0])]
             else:
                 return [
@@ -95,17 +97,7 @@ class Tensor:
         return build_list(self.shape)
 
     def __repr__(self) -> str:
-        def _print(lst, level=0):
-            if not isinstance(lst, list):
-                return str(lst)
-            indent = "  " * level
-            if all(not isinstance(i, list) for i in lst):
-                return "[" + ", ".join(str(i) for i in lst) + "]"
-            else:
-                inner = ",\n".join(indent + "  " + _print(i, level + 1) for i in lst)
-                return "[\n" + inner + "\n" + indent + "]"
-
-        return f"Tensor(data={_print(self.tolist())}, grad={self.grad})"
+        return f"Tensor(data={self.tolist()}, grad={self.grad})"
 
     def __add__(self, other: Self | int | float) -> "Tensor":
         return Add.call(self, other)
@@ -437,39 +429,43 @@ def broadcast_tensor(x: Tensor, y: Tensor) -> tuple[Tensor, Tensor]:
     )
 
 
+def get_larger_format(fmt1: str, fmt2: str) -> str:
+    if fmt1 == fmt2:
+        return fmt1
+    if fmt1 == "d" or fmt2 == "d":
+        return "d"
+    elif fmt1 == "f" or fmt2 == "f":
+        return "f"
+    elif fmt1 == "l" or fmt2 == "l":
+        return "l"
+    else:
+        raise NotImplementedError(f"Unsupported format {fmt1} and {fmt2}")
+
+
+def binary_op(x: Tensor, y: Tensor | int | float, op) -> Tensor:
+    bx, by = broadcast_tensor(x, y if isinstance(y, Tensor) else Tensor(y))
+
+    # If x and y have different format, convert to the bigger one (float > int)
+    fmt = get_larger_format(bx.rawdata.format, by.rawdata.format)
+
+    # Note: Currently, we always create a new array for the output, which may be very inefficient
+    import array
+
+    new_data = array.array(
+        fmt,
+        (
+            op(bx[idx], by[idx])
+            for idx in (bx.st.view.get_indices(i) for i in range(bx.size))
+        ),
+    )
+    out = Tensor(memoryview(new_data), st=bx.st)
+    return out
+
+
 # mypy: disable-error-code="override"
 class Add(Function):
     def forward(self, x: "Tensor", y: int | float | "Tensor") -> "Tensor":
-        print(f"=======Add.forward======\nx={x}\ny={y}")
-
-        def yval(i):
-            if isinstance(y, int | float):
-                return y
-            elif i < len(y.rawdata):
-                return y.rawdata[i]
-            else:
-                return y.rawdata[i % len(y.rawdata)]  # broadcast is not this simple...
-
-        # If x and y have different format, convert to the bigger one (float > int)
-        bx, by = broadcast_tensor(x, y if isinstance(y, Tensor) else Tensor(y))
-        fmt = bx.rawdata.format
-        if fmt != (yfmt := by.rawdata.format):
-            if fmt == "d" or yfmt == "d":
-                fmt = "d"
-            elif fmt == "f" or yfmt == "f":
-                fmt = "f"
-            elif fmt == "l" or yfmt == "l":
-                fmt = "l"
-            else:
-                raise NotImplementedError(f"Unsupported format {fmt} and {yfmt}")
-        import array
-
-        new_data = array.array(
-            fmt,
-            (bx[(idx := bx.st.view.get_indices(i))] + by[idx] for i in range(bx.size)),
-        )
-        out = Tensor(memoryview(new_data), st=x.st)
-        return out
+        return binary_op(x, y, lambda a, b: a + b)
 
     def backward(self, out_grad: "Tensor") -> tuple["Tensor", "Tensor"]:
         return out_grad, out_grad
@@ -485,9 +481,7 @@ class Neg(Function):
 
 class Mul(Function):
     def forward(self, x: "Tensor", y: int | float | "Tensor") -> NDArray[np.floating]:
-
-        other = y.npdata if isinstance(y, Tensor) else y
-        return x.npdata * other
+        return binary_op(x, y, lambda a, b: a * b)
 
     def backward(self, out_grad: "Tensor") -> tuple["Tensor", "Tensor"]:
         x, y = self.inputs
