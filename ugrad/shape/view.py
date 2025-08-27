@@ -56,6 +56,10 @@ class View:
         return len(self.shape)
 
     @property
+    def size(self) -> int:
+        return prod(self.shape)
+
+    @property
     def contiguous(self) -> bool:
         return self.strides == strides_for_shape(self.shape)
 

@@ -60,10 +60,29 @@ class Tensor:
         self.grad: Optional[Tensor] = None
         self.is_leaf = is_leaf
         self.requires_grad = requires_grad
+        self.ops = []
 
     @property
     def npdata(self) -> NDArray:
-        return np.frombuffer(self.rawdata, dtype=self.dtype).reshape(self.st.shape)
+        # We can do lazy data loading here
+        fmt, dtype = self.rawdata.format, self.dtype  # TODO
+        if dtype == np.bool:
+            fmt = "b"
+        import array
+        from functools import reduce
+
+        if False:  # not self.ops:
+            mv = self.rawdata
+        else:
+            new_data = array.array(
+                fmt,
+                (
+                    reduce(lambda x, op: op(x, idx), self.ops, self[idx])
+                    for idx in (self.st.view.get_indices(i) for i in range(self.size))
+                ),
+            )
+            mv = memoryview(new_data)
+        return np.frombuffer(mv, dtype=dtype).reshape(self.st.shape)
 
     @property
     def ndim(self) -> int:
@@ -81,7 +100,8 @@ class Tensor:
             flat_index = self.st.get_index(idx)
             return self.rawdata[flat_index]
         else:
-            return Tensor(self.rawdata, st=self.st.slice(idx))
+            raise NotImplementedError("Subindexing is not supported yet")
+            # return Tensor(self.rawdata, st=self.st.slice(idx))
 
     def tolist(self) -> list:
         def build_list(shape: tuple[int, ...], index_prefix: tuple[int, ...] = ()):
@@ -166,7 +186,7 @@ class Tensor:
 
     @property
     def size(self) -> int:
-        return self.npdata.size
+        return self.st.size
 
     def detach(self) -> "Tensor":
         return Tensor(self.npdata)
@@ -400,7 +420,10 @@ class Function:
     def call(F, *args: Any) -> Tensor:
         f = F()  # Create fresh instance for each call
         result = f(*args)
-        return Tensor(result, f=f, is_leaf=False, requires_grad=f.requires_grad())
+        requires_grad = f.requires_grad()
+        return Tensor(
+            result, f=f, is_leaf=not requires_grad, requires_grad=requires_grad
+        )
 
 
 def _broadcast_view(x, y):
@@ -659,6 +682,7 @@ class Conv2D(Function):
         # filters_grad[outc, inc, y, x]
         # outgrad[N, outc, y, x]
         # x[N, inc, y, x]
+        npdata = filters_grad.npdata
         for kj in range(kernel_size):
             for ki in range(kernel_size):
                 # 1. filter (outc, inc, ks, ks)
@@ -669,17 +693,20 @@ class Conv2D(Function):
                     :, kj : outH + kj, ki : outW + ki, :
                 ]
                 right = right.reshape(-1, in_channels)
-                filters_grad.npdata[:, :, kj, ki] += left.dot(right)
+                npdata[:, :, kj, ki] += left.dot(right)
+        filters_grad = Tensor(npdata)
         # 2. x
         # (N, inc, inH, inW) = (N, outc, outH, outW) ? (outc, inc, ks, ks)
         # (N, inc, 1, 1) = (N, outc, ks, ks) ? (outc, inc, ks, ks)
+        npdata = x_grad.npdata
         for j in range(outH):
             for i in range(outW):
                 # dimension should be ok...
                 for kj in range(kernel_size):
                     for ki in range(kernel_size):
                         # (N, inc, 1, 1) = (N, outc, 1, 1) x (outc, inc, 1, 1)
-                        x_grad.npdata[:, :, j + kj, i + ki] += out_grad.npdata[
-                            :, :, j, i
-                        ].dot(filters.npdata[:, :, kj, ki])
+                        npdata[:, :, j + kj, i + ki] += out_grad.npdata[:, :, j, i].dot(
+                            filters.npdata[:, :, kj, ki]
+                        )
+        x_grad = Tensor(npdata)
         return x_grad, filters_grad

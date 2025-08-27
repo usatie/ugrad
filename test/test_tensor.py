@@ -128,8 +128,6 @@ def test_softmax():
 
     c.assert_all()
     b.assert_all()
-    print(b)
-    print(a)
     a.assert_all()
 
 
@@ -450,3 +448,10 @@ def test_mlp():
         l3.b.torch.data -= 0.001 * l3.b.torch.grad.data
         l3.b.ugrad.assign(l3.b.ugrad - 0.001 * l3.b.ugrad.grad)
     assert loss.ugrad.npdata < 10.0
+
+
+def test_broadcast():
+    x = ComparableTensor(np.random.randn(2, 3))
+    one = ComparableTensor(1.0)
+    y = x + 1
+    y.assert_all()

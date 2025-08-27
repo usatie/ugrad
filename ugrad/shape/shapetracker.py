@@ -12,6 +12,10 @@ class ShapeTracker:
         return ShapeTracker((View.create(shape),))
 
     @property
+    def size(self) -> int:
+        return self.view.size
+
+    @property
     def view(self) -> View:
         return self.views[-1]
 
