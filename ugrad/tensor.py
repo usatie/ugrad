@@ -458,8 +458,17 @@ def binary_op(x: Tensor, y: Tensor | int | float, op) -> Tensor:
             for idx in (bx.st.view.get_indices(i) for i in range(bx.size))
         ),
     )
-    out = Tensor(memoryview(new_data), st=bx.st)
-    return out
+    return Tensor(memoryview(new_data), st=bx.st)
+
+
+def unary_op(x: Tensor, op) -> Tensor:
+    # Note: Currently, we always create a new array for the output, which may be very inefficient
+    import array
+
+    new_data = array.array(
+        x.rawdata.format, (op(x[x.st.view.get_indices(i)]) for i in range(x.size))
+    )
+    return Tensor(memoryview(new_data), st=x.st)
 
 
 # mypy: disable-error-code="override"
@@ -473,7 +482,7 @@ class Add(Function):
 
 class Neg(Function):
     def forward(self, x: "Tensor") -> NDArray[np.floating] | int | float:
-        return -x.npdata
+        return unary_op(x, lambda a: -a)
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         return -out_grad
@@ -511,7 +520,11 @@ class Matmul(Function):
 
 class Pow(Function):
     def forward(self, x: "Tensor", n: int | float) -> NDArray[np.floating]:
-        return x.npdata**n
+        if n == 0:
+            return Tensor.ones_like(x)
+        from math import nan
+
+        return unary_op(x, lambda a: a ** n if abs(n) >= 1 or a >= 0 else nan)
 
     # x^n -> n * x^(n-1)
     def backward(self, out_grad: "Tensor") -> "Tensor":
