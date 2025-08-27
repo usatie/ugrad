@@ -410,15 +410,15 @@ def test_mlp():
             x.assert_all()
         # This hack is needed because we don't have torch.no_grad() like context manager yet
         l1.W.torch.data -= 0.001 * l1.W.torch.grad.data
-        l1.W.ugrad.npdata -= 0.001 * l1.W.ugrad.grad.npdata
+        l1.W.ugrad.assign(l1.W.ugrad - 0.001 * l1.W.ugrad.grad)
         l1.b.torch.data -= 0.001 * l1.b.torch.grad.data
-        l1.b.ugrad.npdata -= 0.001 * l1.b.ugrad.grad.npdata
+        l1.b.ugrad.assign(l1.b.ugrad - 0.001 * l1.b.ugrad.grad)
         l2.W.torch.data -= 0.001 * l2.W.torch.grad.data
-        l2.W.ugrad.npdata -= 0.001 * l2.W.ugrad.grad.npdata
+        l2.W.ugrad.assign(l2.W.ugrad - 0.001 * l2.W.ugrad.grad)
         l2.b.torch.data -= 0.001 * l2.b.torch.grad.data
-        l2.b.ugrad.npdata -= 0.001 * l2.b.ugrad.grad.npdata
+        l2.b.ugrad.assign(l2.b.ugrad - 0.001 * l2.b.ugrad.grad)
         l3.W.torch.data -= 0.001 * l3.W.torch.grad.data
-        l3.W.ugrad.npdata -= 0.001 * l3.W.ugrad.grad.npdata
+        l3.W.ugrad.assign(l3.W.ugrad - 0.001 * l3.W.ugrad.grad)
         l3.b.torch.data -= 0.001 * l3.b.torch.grad.data
-        l3.b.ugrad.npdata -= 0.001 * l3.b.ugrad.grad.npdata
+        l3.b.ugrad.assign(l3.b.ugrad - 0.001 * l3.b.ugrad.grad)
     assert loss.ugrad.npdata < 10.0

@@ -36,23 +36,28 @@ class Tensor:
         if isinstance(data, memoryview):
             NotImplementedError("memoryview not supported yet")
         else:
-            self.npdata = (
+            npdata = (
                 np.array(data, dtype=np.float64)
                 if isinstance(data, (int, float))
                 else data
             )
+            self.dtype = npdata.dtype
             mv = (
-                self.npdata.data
-                if self.npdata.flags.c_contiguous
-                else np.ascontiguousarray(self.npdata).data
+                npdata.data
+                if npdata.flags.c_contiguous
+                else np.ascontiguousarray(npdata).data
             )
             # Ensure the memoryview is 1D
             self.rawdata = mv.cast("B").cast(mv.format)
-            self.st = st if st is not None else ShapeTracker.create(self.npdata.shape)
+            self.st = st if st is not None else ShapeTracker.create(npdata.shape)
         self.f = f
         self.grad: Optional[Tensor] = None
         self.is_leaf = is_leaf
         self.requires_grad = requires_grad
+
+    @property
+    def npdata(self) -> NDArray:
+        return np.frombuffer(self.rawdata, dtype=self.dtype).reshape(self.st.shape)
 
     def __repr__(self) -> str:
         return f"Tensor(npdata={self.npdata}, grad={self.grad})"
@@ -115,7 +120,13 @@ class Tensor:
     def assign(self, other: "Tensor" | int | float) -> "Tensor":
         if other.__class__ is not Tensor:
             other = Tensor(other)
-        self.npdata = other.npdata
+        mv = (
+            other.npdata.data
+            if other.npdata.flags.c_contiguous
+            else np.ascontiguousarray(other.npdata).data
+        )
+        # Ensure the memoryview is 1D
+        self.rawdata = mv.cast("B").cast(mv.format)
         return self
 
     @property
