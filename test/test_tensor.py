@@ -6,6 +6,7 @@ import pytest
 from ugrad import Tensor
 from helper import ComparableTensor
 
+
 def test_broadcast_add():
     a = ComparableTensor(1.0)
     b = ComparableTensor(2.0)
@@ -14,6 +15,7 @@ def test_broadcast_add():
     abc = ab + c
     ab.assert_all()
     abc.assert_all()
+
 
 def test_add():
     # Integer addition
@@ -71,6 +73,7 @@ def test_mul():
     assert np.all((a * 2).npdata == np.array([6, 8, 10]))
     assert np.all((2 * a).npdata == np.array([6, 8, 10]))
 
+
 def test_div():
     a = ComparableTensor(np.array([6.0, 8.0, 10.0]), requires_grad=True)
     b = ComparableTensor(2.0, requires_grad=True)
@@ -82,8 +85,11 @@ def test_div():
     b.assert_all()
     a.assert_all()
 
+
 def test_sumdiv():
-    a = ComparableTensor(np.array([[6.0, 8.0, 10.0], [12.0, 14.0, 16.0]]), requires_grad=True)
+    a = ComparableTensor(
+        np.array([[6.0, 8.0, 10.0], [12.0, 14.0, 16.0]]), requires_grad=True
+    )
     b = a.sum(1, keepdim=True)
     c = a / b
     d = c.sum()
@@ -98,8 +104,12 @@ def test_sumdiv():
 If a tensor needs to be updated twice in the backward pass, it will fail?
 sum(keepdim=True)
 """
+
+
 def test():
-    a = ComparableTensor(np.array([[6.0, 8.0, 10.0], [12.0, 14.0, 16.0]]), requires_grad=True)
+    a = ComparableTensor(
+        np.array([[6.0, 8.0, 10.0], [12.0, 14.0, 16.0]]), requires_grad=True
+    )
     b = a.sum()
     b.requires_grad = True
     b.is_leaf = True
@@ -110,6 +120,7 @@ def test():
     c.assert_all()
     b.assert_all()
     a.assert_all()
+
 
 def test_neg():
     a = Tensor(np.array([1, -2, 3]))
