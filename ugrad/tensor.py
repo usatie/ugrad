@@ -1,16 +1,25 @@
 from __future__ import annotations
+
+import array
+import math
+import time
+import os
+from functools import reduce
+from math import prod
 from typing import Self, Optional, Any
+
 import numpy as np
 from numpy.typing import NDArray
-from math import prod
-import math
 
 from ugrad.shape.shapetracker import ShapeTracker
 from ugrad.shape.view import View
 
-import os
 
-dprint = lambda *args, **kwargs: print(*args, **kwargs) if os.environ.get("DEBUG") else None
+dprint = lambda *args, **kwargs: (
+    print(*args, **kwargs) if os.environ.get("DEBUG") else None
+)
+duration_realize = 0
+
 
 def calculate_gain(nonlinearity: str, a: float = 0.0) -> float:
     if nonlinearity == "relu":
@@ -35,7 +44,7 @@ class Tensor:
         is_leaf: bool = True,
         requires_grad: bool = False,
         f: Optional["Function"] = None,
-        ops = tuple(),
+        ops=tuple(),
     ):
         self.ops = ops
         if isinstance(data, Tensor):
@@ -81,17 +90,23 @@ class Tensor:
                 raise NotImplementedError("Unsupported bool format")
         return fmt
 
+    def iterate_all_elements(self):
+        for i in range(self.size):
+            flat_index = self.st.get_flat_index(self.st.view.get_indices(i))
+            yield self._getitem_by_flat_index(flat_index)
+
     def realize(self):
-        dprint("Realizing Tensor with shape", self.shape, "and ops", self.ops)
-        import array
-        from functools import reduce
+        global duration_realize
+        dprint(
+            f"Realizing Tensor with shape {self.shape} and ops {[op.name for op in self.ops]}"
+        )
         if self.ops:
-            new_data = array.array(
-                self.fmt,
-                (
-                    self._getitem_by_flat_index(flat_index)
-                    for flat_index in (self.st.get_flat_index(self.st.view.get_indices(i)) for i in range(self.size))
-                ),
+            start = time.time()
+            new_data = array.array(self.fmt, self.iterate_all_elements())
+            end = time.time()
+            duration_realize += end - start
+            dprint(
+                f"Realize took {end - start:.6f}s, total time: {duration_realize:.6f}s"
             )
             self.rawdata = memoryview(new_data)
             self.ops = tuple()
@@ -100,20 +115,6 @@ class Tensor:
     def npdata(self) -> NDArray:
         if self.ops:
             # Note: Assume there are only element-wise ops
-            """
-            TODO: same indices may not be able to be used (the data shape may have changed in the past)
-            e.g.
-            >>> a = Tensor(1) + Tensor(2)
-            >>> b = a * Tensor.zeros((2,3))
-            >>> b[0,0]
-            Getting item at index (0, 0) in Tensor with shape (2, 3)
-            Getting item at index (0, 0) in Tensor with shape (2, 3)
-            Getting item at index () in Tensor with shape ()
-            Getting item at index () in Tensor with shape ()
-            idx: (0, 0), bx: Tensor(data=1.0, grad=None), by: Tensor(data=2.0, grad=None)
-            Getting item at index (0, 0) in Tensor with shape ()
-            Traceback (most recent call last):
-            """
             # We can do lazy data loading here
             self.realize()
         return np.frombuffer(self.rawdata, dtype=self.dtype).reshape(self.st.shape)
@@ -123,7 +124,6 @@ class Tensor:
         return self.st.ndim
 
     def _getitem_by_flat_index(self, flat_index: int):
-        from functools import reduce
         return reduce(lambda x, op: op(flat_index), self.ops, self.rawdata[flat_index])
 
     def __getitem__(self, idx: int | tuple[int, ...]):
@@ -213,6 +213,9 @@ class Tensor:
         )
 
     def assign(self, other: "Tensor" | int | float) -> "Tensor":
+        dprint(
+            f"Assigning Tensor with shape {self.shape} from other with shape {other.shape if isinstance(other, Tensor) else 'scalar'}"
+        )
         if other.__class__ is not Tensor:
             other = Tensor(other)
         assert self.shape == other.shape
@@ -426,11 +429,7 @@ class Tensor:
                 if t.grad is None:
                     t.grad = grad
                 else:
-                    dprint(f"Accumulating grad for Tensor with shape {t.shape}")
-                    dprint(f"t.grad: {t.grad}, grad: {grad}")
-                    dprint(f"t.grad + grad: {t.grad + grad}")
                     t.grad.assign(t.grad + grad)
-                    dprint(f"After assignment, t.grad: {t.grad}")
             # Recurse
             t.backward(t.grad if t.requires_grad and t.is_leaf else grad)
 
@@ -497,9 +496,9 @@ def broadcast_tensor(x: Tensor, y: Tensor) -> tuple[Tensor, Tensor]:
     if x.shape == y.shape:
         return x, y
     vx, vy = _broadcast_view(x.st.views[-1], y.st.views[-1])
-    return Tensor(x.rawdata, st=ShapeTracker(x.st.views[:-1] + (vx,)), ops=x.ops), Tensor(
-        y.rawdata, st=ShapeTracker(y.st.views[:-1] + (vy,)), ops=y.ops
-    )
+    return Tensor(
+        x.rawdata, st=ShapeTracker(x.st.views[:-1] + (vx,)), ops=x.ops
+    ), Tensor(y.rawdata, st=ShapeTracker(y.st.views[:-1] + (vy,)), ops=y.ops)
 
 
 def get_larger_type(x: Tensor, y: Tensor) -> tuple[str, np.dtype]:
@@ -514,46 +513,101 @@ def get_larger_type(x: Tensor, y: Tensor) -> tuple[str, np.dtype]:
     else:
         raise NotImplementedError(f"Unsupported format {fmt1} and {fmt2}")
 
+
 class Op:
-    def __init__(self, fmt, dtype, f):
+    def __init__(self, fmt, dtype, f, name):
         self.fmt = fmt
         self.dtype = dtype
         self.f = f
-    
+        self.name = name
+
     def __call__(self, idx):
         return self.f(idx)
 
-def binary_op(x: Tensor, y: Tensor | int | float, op, name = None) -> Tensor:
+
+def binary_op(x: Tensor, y: Tensor | int | float, op, name=None) -> Tensor:
     bx, by = broadcast_tensor(x, y if isinstance(y, Tensor) else Tensor(y))
 
     # If x and y have different format, convert to the bigger one (float > int)
     fmt, dtype = get_larger_type(bx, by)
     out = Tensor(bx)
-    #out.ops = (Op(fmt, dtype, lambda flat_index: print(f"{name}({(bxval := bx._getitem_by_flat_index(flat_index))}, {(byval := by[by.st.view.get_indices(flat_index)])})={(res := op(bxval, byval))} flat_index: {flat_index}, bx: {bx}, by: {by}") or res), )
+
+    # out.ops = (Op(fmt, dtype, lambda flat_index: print(f"{name}({(bxval := bx._getitem_by_flat_index(flat_index))}, {(byval := by[by.st.view.get_indices(flat_index)])})={(res := op(bxval, byval))} flat_index: {flat_index}, bx: {bx}, by: {by}") or res), )
     def f(flat_index):
         bxval = bx._getitem_by_flat_index(flat_index)
         byval = by[by.st.view.get_indices(flat_index)]
         res = op(bxval, byval)
         return res
 
-    out.ops = (Op(fmt, dtype, f), )
+    out.ops = (Op(fmt, dtype, f, name),)
     return out
 
 
-def unary_op(x: Tensor, op) -> Tensor:
+def unary_op(x: Tensor, op, name=None) -> Tensor:
     # Note: Currently, we always create a new array for the output, which may be very inefficient
-    import array
-
-    new_data = array.array(
-        x.fmt, (op(x[x.st.view.get_indices(i)]) for i in range(x.size))
+    out = Tensor(x)
+    out.ops = (
+        Op(
+            x.fmt,
+            x.dtype,
+            lambda flat_index: op(x._getitem_by_flat_index(flat_index)),
+            name,
+        ),
     )
-    return Tensor(memoryview(new_data), st=x.st)
+    return out
+
+
+def reduce_op(x: Tensor, dim, keepdim, op, initial, name=None) -> Tensor:
+    if dim is None:
+        shape = tuple()
+        if keepdim:
+            shape = (1,) * x.ndim
+        # Reduce all dimensions
+        out = Tensor(np.empty(shape, dtype=x.dtype))
+        cached_res = None
+
+        def f(flat_index):
+            nonlocal cached_res
+            if cached_res is None:
+                cached_res = reduce(op, x.iterate_all_elements(), initial)
+            return cached_res
+
+        out.ops = (Op(x.fmt, x.dtype, f, name),)
+        return out
+    else:
+        shape = list(x.shape)
+        if keepdim:
+            shape[dim] = 1
+        else:
+            shape.pop(dim)
+        out = Tensor(np.empty(tuple(shape), dtype=x.dtype))
+        cached_res = {}
+
+        def f(flat_index):
+            nonlocal cached_res
+            idx = out.st.view.get_indices(flat_index)
+            if not keepdim:
+                idx = idx[:dim] + (0,) + idx[dim:]
+            if idx not in cached_res:
+                # Compute reduction for this index, not using numpy features
+                res = initial
+                for i in range(x.shape[dim]):
+                    full_idx = idx[:dim] + (i,) + idx[dim + 1 :]
+                    val = x[full_idx]
+                    res = op(res, val)
+                cached_res[idx] = res
+            return cached_res[idx]
+
+        out.ops = (Op(x.fmt, x.dtype, f, name),)
+        return out
 
 
 # mypy: disable-error-code="override"
 class Add(Function):
     def forward(self, x: "Tensor", y: int | float | "Tensor") -> "Tensor":
-        dprint(f"Add.forward: x.shape={x.shape}, y.shape={y.shape if isinstance(y, Tensor) else 'scalar'}")
+        dprint(
+            f"Add.forward: x.shape={x.shape}, y.shape={y.shape if isinstance(y, Tensor) else 'scalar'}"
+        )
         return binary_op(x, y, lambda a, b: a + b, "Add")
 
     def backward(self, out_grad: "Tensor") -> tuple["Tensor", "Tensor"]:
@@ -564,7 +618,7 @@ class Add(Function):
 class Neg(Function):
     def forward(self, x: "Tensor") -> NDArray[np.floating] | int | float:
         dprint("Neg.forward {x.shape=", x.shape, "}")
-        return unary_op(x, lambda a: -a)
+        return unary_op(x, lambda a: -a, "Neg")
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         dprint("Neg.backward {out_grad.shape=", out_grad.shape, "}")
@@ -573,12 +627,16 @@ class Neg(Function):
 
 class Mul(Function):
     def forward(self, x: "Tensor", y: int | float | "Tensor") -> NDArray[np.floating]:
-        dprint(f"Mul.forward: x.shape={x.shape}, y.shape={y.shape if isinstance(y, Tensor) else 'scalar'}")
+        dprint(
+            f"Mul.forward: x.shape={x.shape}, y.shape={y.shape if isinstance(y, Tensor) else 'scalar'}"
+        )
         return binary_op(x, y, lambda a, b: a * b, "Mul")
 
     def backward(self, out_grad: "Tensor") -> tuple["Tensor", "Tensor"]:
         x, y = self.inputs
-        dprint(f"Mul.backward x.shape={x.shape}, y.shape={y.shape if isinstance(y, Tensor) else 'scalar'}, out_grad.shape={out_grad.shape}")
+        dprint(
+            f"Mul.backward x.shape={x.shape}, y.shape={y.shape if isinstance(y, Tensor) else 'scalar'}, out_grad.shape={out_grad.shape}"
+        )
         x_grad = Tensor(out_grad * y)
         y_grad = Tensor(out_grad * x)
         dprint(f"x_grad={x_grad}, y_grad={y_grad}")
@@ -608,14 +666,17 @@ class Pow(Function):
         dprint(f"Pow.forward x.shape={x.shape}, n={n}")
         if n == 0:
             return Tensor.ones_like(x)
-        from math import nan
 
-        return unary_op(x, lambda a: a ** n if abs(n) >= 1 or a >= 0 else nan)
+        return unary_op(
+            x, lambda a: a ** n if abs(n) >= 1 or a >= 0 else math.nan, "Pow"
+        )
 
     # x^n -> n * x^(n-1)
     def backward(self, out_grad: "Tensor") -> "Tensor":
         x, n = self.inputs
-        dprint(f"Pow.backward x.shape={x.shape}, n={n}, out_grad.shape={out_grad.shape}")
+        dprint(
+            f"Pow.backward x.shape={x.shape}, n={n}, out_grad.shape={out_grad.shape}"
+        )
         x_grad = Tensor((n * (x.npdata ** (n - 1))) * out_grad.npdata)
         return x_grad
 
@@ -625,21 +686,21 @@ class Sum(Function):
         self, x: "Tensor", dim: Optional[int], keepdim: bool
     ) -> NDArray[np.floating] | int | float:
         dprint(f"Sum.forward: x.shape={x.shape}, dim={dim}, keepdim={keepdim}")
-        if dim is None:
-            out = x.npdata.sum(keepdims=keepdim)
-            return out
-        else:
-            return x.npdata.sum(dim, keepdims=keepdim)
+        return reduce_op(x, dim, keepdim, lambda a, b: a + b, 0, "Sum")
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         (x, dim, keepdim) = self.inputs
-        dprint(f"Sum.backward: x.shape={x.shape}, dim={dim}, keepdim={keepdim}, out_grad.shape={out_grad.shape}")
+        dprint(
+            f"Sum.backward: x.shape={x.shape}, dim={dim}, keepdim={keepdim}, out_grad.shape={out_grad.shape}"
+        )
         out = Tensor(np.zeros_like(x.npdata))
         dprint(f"out = {out}, out_grad = {out_grad}")
         if dim is not None:
             if not keepdim:
                 dprint(f"out_grad.unsqueeze(dim) = {out_grad.unsqueeze(dim)}")
-                dprint(f"out + out_grad.unsqueeze(dim) = {out + out_grad.unsqueeze(dim)}")
+                dprint(
+                    f"out + out_grad.unsqueeze(dim) = {out + out_grad.unsqueeze(dim)}"
+                )
                 return out + out_grad.unsqueeze(dim)  # let numpy broadcast
             else:
                 dprint(f"out + out_grad = {out + out_grad}")
@@ -681,7 +742,8 @@ class ReLU(Function):
 
 class LogN(Function):
     def forward(self, x: "Tensor") -> NDArray[np.floating]:
-        return np.log(x.npdata)
+        dprint(f"LogN.forward: x.shape={x.shape}")
+        return unary_op(x, lambda a: math.log(a) if a > 0 else math.nan, "LogN")
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         # y = log(x)
@@ -697,7 +759,9 @@ class Exponential(Function):
         return self.out
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
-        dprint(f"Exponential.backward: out_grad.shape={out_grad.shape}, self.out.shape={self.out.shape}")
+        dprint(
+            f"Exponential.backward: out_grad.shape={out_grad.shape}, self.out.shape={self.out.shape}"
+        )
         # y = exp(x)
         # y' = exp(x)
         return Tensor(out_grad.npdata * self.out)
@@ -705,7 +769,8 @@ class Exponential(Function):
 
 class Cosine(Function):
     def forward(self, x: "Tensor") -> NDArray[np.floating]:
-        return np.cos(x.npdata)
+        dprint(f"Cosine.forward: x.shape={x.shape}")
+        return unary_op(x, lambda a: math.cos(a), "Cosine")
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
         # y = cos(x)
