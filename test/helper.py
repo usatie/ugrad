@@ -79,8 +79,8 @@ class ComparableTensor(metaclass=ComparableTensorMeta):
     def __repr__(self):
         grad_a = (
             self.a.grad.numpy()
-            if self.a.grad is not None and self.a.requires_grad and self.a.is_leaf
-            else self.a.grad
+            if self.a.requires_grad and self.a.is_leaf and self.a.grad is not None
+            else None
         )
         grad_b = (
             self.b.grad.numpy()
