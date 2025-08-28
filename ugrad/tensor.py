@@ -262,9 +262,6 @@ class Tensor:
     def randn(*shape: int, **kwargs) -> "Tensor":
         # Box-Muller transformation for generating standard normal distribution
         # https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
-        """
-        # Orig implementation using Tensor operations (too slow)
-        # However, I think this approach is needed to be almost as fast as inline python code
 
         u1 = 1 - Tensor.rand(*shape, **kwargs)  # (0, 1] is used to avoid log(0)
         u2 = Tensor.rand(*shape, **kwargs)
@@ -273,6 +270,9 @@ class Tensor:
         z1 = R * theta.cos()
         return Tensor(z1, **kwargs)  # to ensure is_leaf=True
         """
+        # Orig implementation above using Tensor operations are 2x-3x slower than python inline code below
+        # However, I think this approach is more important for future GPU implementation
+
         data = array.array("f")
         size = prod(shape)
         import random
@@ -287,6 +287,7 @@ class Tensor:
         return Tensor(
             memoryview(data), st=ShapeTracker.create(shape), **kwargs
         )  # to ensure is_leaf=True
+        """
 
     @staticmethod
     def normal(*shape: int, mean: float = 0.0, std: float = 1.0, **kwargs) -> "Tensor":
