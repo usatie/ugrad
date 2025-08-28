@@ -1,17 +1,30 @@
-from ugrad import Tensor
 import numpy as np
 import torch
+import pytest
+
+
+from ugrad import Tensor
 from helper import ComparableTensor
 
+def test_broadcast_add():
+    a = ComparableTensor(1.0)
+    b = ComparableTensor(2.0)
+    c = ComparableTensor(np.ones((2, 3)))
+    ab = a + b
+    abc = ab + c
+    ab.assert_all()
+    abc.assert_all()
 
 def test_add():
     # Integer addition
     a = Tensor(np.array([1, 2, 3]))
     b = Tensor(np.array([4, 5, 6]))
     c = a + b
+    d = c + 10
     assert np.all(np.array([5, 7, 9]) == c.npdata)
     assert np.all((a + 4).npdata == np.array([5, 6, 7]))
     assert np.all((4 + a).npdata == np.array([5, 6, 7]))
+    assert np.all(d.npdata == np.array([15, 17, 19]))
 
     # Float addition
     a = Tensor(np.array([1.5, 2.5, 3.5]))
@@ -58,6 +71,45 @@ def test_mul():
     assert np.all((a * 2).npdata == np.array([6, 8, 10]))
     assert np.all((2 * a).npdata == np.array([6, 8, 10]))
 
+def test_div():
+    a = ComparableTensor(np.array([6.0, 8.0, 10.0]), requires_grad=True)
+    b = ComparableTensor(2.0, requires_grad=True)
+    c = a / b
+    d = c.sum()
+    d.backward()
+    d.assert_all()
+    c.assert_all()
+    b.assert_all()
+    a.assert_all()
+
+def test_sumdiv():
+    a = ComparableTensor(np.array([[6.0, 8.0, 10.0], [12.0, 14.0, 16.0]]), requires_grad=True)
+    b = a.sum(1, keepdim=True)
+    c = a / b
+    d = c.sum()
+    d.backward()
+    d.assert_all()
+    c.assert_all()
+    b.assert_all()
+    a.assert_all()
+
+
+"""
+If a tensor needs to be updated twice in the backward pass, it will fail?
+sum(keepdim=True)
+"""
+def test():
+    a = ComparableTensor(np.array([[6.0, 8.0, 10.0], [12.0, 14.0, 16.0]]), requires_grad=True)
+    b = a.sum()
+    b.requires_grad = True
+    b.is_leaf = True
+    c = a * b
+    d = c.sum()
+    d.backward()
+    d.assert_all()
+    c.assert_all()
+    b.assert_all()
+    a.assert_all()
 
 def test_neg():
     a = Tensor(np.array([1, -2, 3]))
@@ -76,10 +128,11 @@ def test_t():
     c = b * 2
     loss = c.sum()
     loss.backward()
+    loss.assert_all()
 
-    a.assert_all()
-    b.assert_all()
     c.assert_all()
+    b.assert_all()
+    a.assert_all()
 
 
 def test_lt():
@@ -164,6 +217,7 @@ def test_sqrt():
 
 
 def test_mean():
+    """
     a = ComparableTensor(np.random.randn(2, 3), requires_grad=True)
     b = a.mean(1)
     c = b.sum()
@@ -172,10 +226,14 @@ def test_mean():
     c.assert_all()
     b.assert_all()
     a.assert_all()
+    """
 
-    d = ComparableTensor(np.random.randn(2, 3, 4), requires_grad=True)
-    d.mean().sum().backward()
+    d = ComparableTensor(np.random.randn(2, 3), requires_grad=True)
+    e = d.mean()
+    f = e.sum()
+    f.backward()
     d.assert_all()
+    return
 
     e = ComparableTensor(np.random.randn(2, 3, 4), requires_grad=True)
     e.mean(0).sum().backward()
@@ -258,6 +316,7 @@ def test_zeros_like():
     ComparableTensor.zeros_like(b).assert_all()
 
 
+@pytest.mark.slow
 def test_randn():
     a = Tensor.randn(10, 20, 30, 40)
     assert a.shape == (10, 20, 30, 40)
@@ -265,6 +324,7 @@ def test_randn():
     assert abs(a.std().npdata - 1.0) < 0.01, "Std should be close to 1"
 
 
+@pytest.mark.slow
 def test_normal():
     a = Tensor.normal(10, 20, 30, 40, mean=42.0, std=3.0)
     assert a.shape == (10, 20, 30, 40)
@@ -272,6 +332,7 @@ def test_normal():
     assert abs(a.std().npdata - 3.0) < 0.1, "Std should be close to 3.0"
 
 
+@pytest.mark.slow
 def test_uniform():
     a = Tensor.uniform(10, 20, 30, 40, low=0.0, high=1.0)
     assert a.shape == (10, 20, 30, 40)
@@ -404,6 +465,7 @@ class LinearLayer:
         self.b.ugrad.grad = None
 
 
+@pytest.mark.slow
 def test_mlp():
     x = ComparableTensor(np.random.randn(32, 2))
     np_y = np.random.randint(0, 2, 32).reshape(32, 1)

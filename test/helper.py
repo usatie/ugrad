@@ -170,6 +170,7 @@ register("__rmul__")
 register("__lt__")
 register("__le__")
 register("__gt__")
+register("__truediv__")
 
 """
 ComparableSGD is a wrapper around both PyTorch and ugrad SGD optimizers.

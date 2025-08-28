@@ -77,7 +77,7 @@ class Tensor:
             raise IndexError("Too many indices for tensor")
         if len(idx) == len(self.shape):
             # Maybe it's dumb to make flat index, if memoryview is multi dimensional, but we ensure data is 1D
-            index = self.st.get_index(idx)
+            index = self.st.get_flat_index(idx)
             return self.data[index]
         else:
             return Tensor(self.data, self.st.slice(idx))

@@ -39,7 +39,7 @@ class ShapeTracker:
     def transpose(self, *axes: int) -> "ShapeTracker":
         return ShapeTracker(self.views[:-1] + (self.view.transpose(*axes),))
 
-    def get_index(self, indices: tuple[int, ...]) -> int:
+    def get_flat_index(self, indices: tuple[int, ...]) -> int:
         flat_index = self.views[-1].get_index(indices)
         for view in reversed(self.views[:-1]):
             flat_index = view.get_index(view.get_indices(flat_index))
