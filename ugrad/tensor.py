@@ -40,7 +40,7 @@ def calculate_gain(nonlinearity: str, a: float = 0.0) -> float:
 class Tensor:
     def __init__(
         self,
-        data: "Tensor" | NDArray[np.floating] | int | float | memoryview,
+        data: "Tensor" | NDArray | int | float | memoryview,
         st: ShapeTracker = None,
         is_leaf: bool = True,
         requires_grad: bool = False,
@@ -51,8 +51,8 @@ class Tensor:
         if isinstance(data, Tensor):
             self._dtype = data.dtype
             self.rawdata = data.rawdata
-            self.st = data.st
-            self.ops = data.ops
+            self.st = st if st is not None else data.st
+            self.ops = ops if ops else data.ops
         elif isinstance(data, memoryview):
             self._dtype = np.dtype(data.format)
             self.rawdata = data
@@ -240,7 +240,7 @@ class Tensor:
     def detach(self) -> "Tensor":
         return Tensor(self.npdata)
 
-    def numpy(self) -> NDArray[np.floating]:
+    def numpy(self) -> NDArray:
         if self.requires_grad:
             raise RuntimeError(
                 "Can't call numpy() on Tensor that requires grad. Use tensor.detach().numpy() instead."
@@ -414,6 +414,9 @@ class Tensor:
 
     def log(self) -> "Tensor":
         return LogN.call(self)
+
+    def squeeze(self, dim: int) -> "Tensor":
+        return Squeeze.call(self, dim)
 
     def unsqueeze(self, dim: int) -> "Tensor":
         return Unsqueeze.call(self, dim)
@@ -751,13 +754,39 @@ class Sum(Function):
             return out + out_grad
 
 
-class Unsqueeze(Function):
+class Squeeze(Function):
     def forward(self, x: "Tensor", dim: int) -> Tensor:
-        return np.expand_dims(x.npdata, dim)
+        dprint(f"Squeeze.forward: x.shape={x.shape}, dim={dim}")
+        # numpy.exceptions.AxisError: axis 2 is out of bounds for array of dimension 1
+        # ValueError: cannot select an axis to squeeze out which has size not equal to one
+        if dim >= x.ndim:
+            raise ValueError(
+                f"axis {dim} is out of bounds for tensor of dimension {x.ndim}"
+            )
+        if x.shape[dim] != 1:
+            raise ValueError("Cannot squeeze dimension with size not equal to one")
+        return Tensor(x, st=x.st.reshape(x.shape[:dim] + x.shape[dim + 1 :]))
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
+        dprint(f"Squeeze.backward: out_grad.shape={out_grad.shape}")
         (x, dim) = self.inputs
-        return Tensor(out_grad.npdata.squeeze(dim))
+        return out_grad.unsqueeze(dim)
+
+
+class Unsqueeze(Function):
+    def forward(self, x: "Tensor", dim: int) -> Tensor:
+        dprint(f"Unsqueeze.forward: x.shape={x.shape}, dim={dim}")
+        # numpy.exceptions.AxisError: axis 2 is out of bounds for array of dimension 2
+        if dim > x.ndim:
+            raise ValueError(
+                f"axis {dim} is out of bounds for tensor of dimension {x.ndim}"
+            )
+        return Tensor(x, st=x.st.reshape(x.shape[:dim] + (1,) + x.shape[dim:]))
+
+    def backward(self, out_grad: "Tensor") -> "Tensor":
+        dprint(f"Unsqueeze.backward: out_grad.shape={out_grad.shape}")
+        (x, dim) = self.inputs
+        return out_grad.squeeze(dim)
 
 
 class Transpose(Function):

@@ -27,7 +27,9 @@ class ShapeTracker:
     def ndim(self) -> int:
         return len(self.shape)
 
-    def reshape(self, *shape: int) -> "ShapeTracker":
+    def reshape(self, *shape: int | tuple[int, ...]) -> "ShapeTracker":
+        if len(shape) == 1 and isinstance(shape[0], tuple):
+            shape = shape[0]
         if (view := self.view.reshape(*shape)) is not None:
             return ShapeTracker(self.views[:-1] + (view,))
         else:

@@ -101,6 +101,11 @@ class ComparableTensor(metaclass=ComparableTensorMeta):
         ugrad_out = self.ugrad.conv2d(W.ugrad)
         return ComparableTensor(torch_out, ugrad_out)
 
+    def squeeze(self, dim: int) -> "ComparableTensor":
+        torch_out = torch.squeeze(self.torch, dim)
+        ugrad_out = self.ugrad.squeeze(dim)
+        return ComparableTensor(torch_out, ugrad_out)
+
     def batch_norm(self) -> "ComparableTensor":
         # What's this? Only did this for dimension match...
         r = (0,) + tuple(range(2, self.torch.dim()))

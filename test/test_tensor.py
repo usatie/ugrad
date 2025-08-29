@@ -128,6 +128,33 @@ def test_neg():
     assert np.all(np.array([-1, 2, -3]) == b.npdata)
 
 
+def test_unsqueeze():
+    a = ComparableTensor(np.zeros((2, 3, 4)), requires_grad=True)
+    b = a.unsqueeze(1)
+    c = b * 2
+    d = c.sum()
+    d.backward()
+    d.assert_all()
+    c.assert_all()
+    b.assert_all()
+    a.assert_all()
+
+
+def test_squeeze():
+    a = ComparableTensor(np.zeros((2, 1, 3, 4)), requires_grad=True)
+    b = a.squeeze(1)
+    c = b * 2
+    d = c.sum()
+    d.backward()
+    d.assert_all()
+    c.assert_all()
+    b.assert_all()
+    a.assert_all()
+
+    with pytest.raises(ValueError):
+        a.squeeze(2)
+
+
 def test_t():
     a = ComparableTensor(
         np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32), requires_grad=True
