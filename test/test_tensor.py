@@ -567,3 +567,24 @@ def test_broadcast():
     one = ComparableTensor(1.0)
     y = x + 1
     y.assert_all()
+
+
+def test_negative_dim():
+    # Sum with negative dim
+    x = ComparableTensor(np.random.randn(2, 3, 4), requires_grad=True)
+    y = x.sum(-1)
+    z = y * ComparableTensor(np.random.randn(2, 3))
+    z.sum().backward()
+    z.assert_all()
+    y.assert_all()
+    x.assert_all()
+
+    # Unsqueeze with negative dim
+    # (2,3,4) -> (2,3,4,1)
+    x.unsqueeze(-1).assert_all()
+
+    # Squeeze with negative dim
+    # (2,3,4) -> (2,3,4,1) -> (2,3,4)
+    x.unsqueeze(-1).squeeze(-1).assert_all()
+    # (2,3,4) -> (2,1,3,4) -> (2,3,4)
+    x.unsqueeze(1).squeeze(-3).assert_all()
