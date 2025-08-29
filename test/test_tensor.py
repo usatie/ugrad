@@ -182,6 +182,18 @@ def test_relu():
     a.assert_all()
 
 
+def test_cosine():
+    a = ComparableTensor(
+        np.arange(0, 6, dtype=np.double).reshape(2, 3), requires_grad=True
+    )
+    b = a.cos()
+    c = b.sum()
+    c.backward()
+    c.assert_all()
+    b.assert_all()
+    a.assert_all()
+
+
 def test_softmax():
     a = ComparableTensor(
         np.arange(0, 6, dtype=np.double).reshape(2, 3), requires_grad=True

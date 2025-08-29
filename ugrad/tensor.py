@@ -334,7 +334,7 @@ class Tensor:
             receptive_field_size = prod(shape[2:])
             fan_in *= receptive_field_size
             fan_out *= receptive_field_size
-        a = gain * np.sqrt(6 / (fan_in + fan_out))  # Uniform distribution in [-a, a]
+        a = gain * math.sqrt(6 / (fan_in + fan_out))  # Uniform distribution in [-a, a]
         return Tensor.uniform(*shape, low=-a, high=a, **kwargs)
 
     @staticmethod
@@ -352,7 +352,7 @@ class Tensor:
             receptive_field_size = prod(shape[2:])
             fan_in *= receptive_field_size
             fan_out *= receptive_field_size
-        std = gain * np.sqrt(2 / (fan_in + fan_out))
+        std = gain * math.sqrt(2 / (fan_in + fan_out))
         return Tensor.normal(*shape, mean=0.0, std=std, **kwargs)
 
     @staticmethod
@@ -404,6 +404,9 @@ class Tensor:
 
     def cos(self) -> "Tensor":
         return Cosine.call(self)
+
+    def sin(self) -> "Tensor":
+        return Cosine.call(self - (math.pi / 2))
 
     def softmax(self, dim: int) -> "Tensor":
         e = self.exp()
@@ -816,15 +819,10 @@ class Cosine(Function):
         # y = cos(x)
         # y' = -sin(x)
         (x,) = self.inputs
-        return Tensor(-out_grad.npdata * np.sin(x.npdata))
+        return out_grad * (-x.detach().sin())
 
 
 class Conv2D(Function):
-    """
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int):
-        self.kernels = Tensor(np.randn(out_channels, in_channels, kernel_size, kernel_size))
-    """
-
     def forward(self, x: "Tensor", filters: "Tensor") -> NDArray[np.floating]:
         # https://docs.pytorch.org/docs/stable/generated/torch.nn.Conv2d.html
         out_channels, in_channels, kernel_size, kernel_size = filters.shape
