@@ -499,7 +499,7 @@ def unbroadcast(x: "Tensor", shape: tuple[int, ...]) -> "Tensor":
         dim = out.shape[-i]
         orig_dim = shape[-i] if shape and i <= len(shape) else 1
         if dim != orig_dim:
-            out = out.sum(out.ndim - i).unsqueeze(out.ndim - i)
+            out = out.sum(-i).unsqueeze(-i)
         else:
             i += 1
     dprint(f"Unbroadcasted to {out.shape}")
@@ -631,6 +631,8 @@ def reduce_op(x: Tensor, dim, keepdim, op, initial, name=None) -> Tensor:
         out.ops = (Op(x.fmt, x.dtype, f, name),)
         return out
     else:
+        if dim < 0:
+            dim += x.ndim
         shape = list(x.shape)
         if keepdim:
             shape[dim] = 1
@@ -773,6 +775,12 @@ class Squeeze(Function):
             raise ValueError(
                 f"axis {dim} is out of bounds for tensor of dimension {x.ndim}"
             )
+        if dim < 0:
+            if dim + x.ndim < 0:
+                raise ValueError(
+                    f"axis {dim} is out of bounds for tensor of dimension {x.ndim}"
+                )
+            dim += x.ndim
         if x.shape[dim] != 1:
             raise ValueError("Cannot squeeze dimension with size not equal to one")
         return Tensor(x, st=x.st.reshape(x.shape[:dim] + x.shape[dim + 1 :]))
@@ -787,10 +795,17 @@ class Unsqueeze(Function):
     def forward(self, x: "Tensor", dim: int) -> Tensor:
         dprint(f"Unsqueeze.forward: x.shape={x.shape}, dim={dim}")
         # numpy.exceptions.AxisError: axis 2 is out of bounds for array of dimension 2
-        if dim > x.ndim:
+        ndim = x.ndim + 1
+        if dim >= ndim:
             raise ValueError(
                 f"axis {dim} is out of bounds for tensor of dimension {x.ndim}"
             )
+        if dim < 0:
+            if dim + ndim < 0:
+                raise ValueError(
+                    f"axis {dim} is out of bounds for tensor of dimension {x.ndim}"
+                )
+            dim += ndim
         return Tensor(x, st=x.st.reshape(x.shape[:dim] + (1,) + x.shape[dim:]))
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
