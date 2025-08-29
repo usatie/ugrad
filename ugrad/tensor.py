@@ -57,22 +57,22 @@ class Tensor:
             self._dtype = np.dtype(data.format)
             self.rawdata = data
             self.st = st if st is not None else ShapeTracker.create(data.shape)
-        else:
-            npdata = (
-                np.array(data, dtype=np.float64)
-                if isinstance(data, (int, float))
-                else data
-            )
-            self._dtype = npdata.dtype
+        elif isinstance(data, np.ndarray):
+            self._dtype = data.dtype
             mv = (
-                npdata.data
-                if npdata.flags.c_contiguous
-                else np.ascontiguousarray(npdata).data
+                data.data
+                if data.flags.c_contiguous
+                else np.ascontiguousarray(data).data
             )
             # Ensure the memoryview is 1D
-            dprint("data:", data, "mv.shape:", mv.shape, "mv.format:", mv.format)
             self.rawdata = mv.cast("B").cast(mv.format)
-            self.st = st if st is not None else ShapeTracker.create(npdata.shape)
+            self.st = st if st is not None else ShapeTracker.create(data.shape)
+        elif isinstance(data, (int, float)):
+            self._dtype = np.float64
+            self.rawdata = memoryview(array.array("d", [data]))
+            self.st = st if st is not None else ShapeTracker.create(())
+        else:
+            raise TypeError(f"Unsupported data type: {type(data)}")
         self.f = f
         self.grad: Optional[Tensor] = None
         self.is_leaf = is_leaf
@@ -725,9 +725,7 @@ class Pow(Function):
 
 
 class Sum(Function):
-    def forward(
-        self, x: "Tensor", dim: Optional[int], keepdim: bool
-    ) -> Tensor:
+    def forward(self, x: "Tensor", dim: Optional[int], keepdim: bool) -> Tensor:
         dprint(f"Sum.forward: x.shape={x.shape}, dim={dim}, keepdim={keepdim}")
         return reduce_op(x, dim, keepdim, lambda a, b: a + b, 0, "Sum")
 
