@@ -491,17 +491,19 @@ class Tensor:
 # orig [1]            (, 1)
 # x    [[1,1],[1,1]]  (2, 2)
 def unbroadcast(x: "Tensor", shape: tuple[int, ...]) -> "Tensor":
+    dprint(f"Unbroadcasting from {x.shape} to {shape}")
     # Assume x is broadcasted from original shape
-    out = x.npdata.copy()
+    out = x
     i = 1
     while out.shape != shape and i <= len(out.shape):
         dim = out.shape[-i]
         orig_dim = shape[-i] if shape and i <= len(shape) else 1
         if dim != orig_dim:
-            out = np.expand_dims(out.sum(-i), -i)
+            out = out.sum(out.ndim - i).unsqueeze(out.ndim - i)
         else:
             i += 1
-    return Tensor(out.reshape(shape))
+    dprint(f"Unbroadcasted to {out.shape}")
+    return Tensor(out, st=ShapeTracker.create(shape))
 
 
 class Function:
