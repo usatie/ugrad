@@ -107,11 +107,12 @@ class Tensor:
             new_data = array.array(self.fmt, self.iterate_all_elements())
             end = time.time()
             duration_realize += end - start
+            self.rawdata = memoryview(new_data)
+            self.ops = tuple()
+            self.st = ShapeTracker.create(self.shape)
             dprint(
                 f"Realize took {end - start:.6f}s, total time: {duration_realize:.6f}s"
             )
-            self.rawdata = memoryview(new_data)
-            self.ops = tuple()
 
     @property
     def npdata(self) -> NDArray:
@@ -119,7 +120,14 @@ class Tensor:
             # Note: Assume there are only element-wise ops
             # We can do lazy data loading here
             self.realize()
-        return np.frombuffer(self.rawdata, dtype=self.dtype).reshape(self.st.shape)
+        np_strides = tuple(s * self.itemsize for s in self.st.view.strides)
+        return np.lib.stride_tricks.as_strided(
+            np.frombuffer(self.rawdata, dtype=self.dtype), self.shape, np_strides
+        )
+
+    @property
+    def itemsize(self) -> int:
+        return self.rawdata.itemsize
 
     @property
     def ndim(self) -> int:
@@ -791,10 +799,12 @@ class Unsqueeze(Function):
 
 class Transpose(Function):
     def forward(self, x: "Tensor") -> Tensor:
-        return x.npdata.transpose()
+        dprint(f"Transpose.forward: x.shape={x.shape}")
+        return Tensor(x, st=x.st.transpose())
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
-        return Tensor(out_grad.npdata.transpose())
+        dprint(f"Transpose.backward: out_grad.shape={out_grad.shape}")
+        return Tensor(out_grad, st=out_grad.st.transpose())
 
 
 class ReLU(Function):
