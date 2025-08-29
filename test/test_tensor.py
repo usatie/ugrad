@@ -588,3 +588,11 @@ def test_negative_dim():
     x.unsqueeze(-1).squeeze(-1).assert_all()
     # (2,3,4) -> (2,1,3,4) -> (2,3,4)
     x.unsqueeze(1).squeeze(-3).assert_all()
+
+
+def test_reshape():
+    x = ComparableTensor(np.random.randn(2, 3, 4), requires_grad=True)
+    y = x.reshape(4, 3, 2)
+    z = y.reshape(2, 3, 2, 2)
+    y.assert_all()
+    z.assert_all()

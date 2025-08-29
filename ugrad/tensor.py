@@ -133,6 +133,9 @@ class Tensor:
     def ndim(self) -> int:
         return self.st.ndim
 
+    def reshape(self, *shape: int):
+        return Reshape.call(self, *shape)
+
     def _getitem_by_flat_index(self, flat_index: int):
         return reduce(lambda x, op: op(flat_index), self.ops, self.rawdata[flat_index])
 
@@ -764,6 +767,17 @@ class Sum(Function):
         else:
             dprint(f"out + out_grad = {out + out_grad}")
             return out + out_grad
+
+
+class Reshape(Function):
+    def forward(self, x: Tensor, *shape: tuple[int, ...]) -> Tensor:
+        dprint(f"Reshape.forward: x.shape={x.shape}, shape={shape}")
+        return Tensor(x, st=x.st.reshape(*shape))
+
+    def backward(self, out_grad: "Tensor") -> "Tensor":
+        dprint(f"Reshape.backward: out_grad.shape={out_grad.shape}")
+        (x, shape) = self.inputs
+        return out_grad.reshape(*x.shape)
 
 
 class Squeeze(Function):
