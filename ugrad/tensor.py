@@ -494,13 +494,13 @@ def unbroadcast(x: "Tensor", shape: tuple[int, ...]) -> "Tensor":
 
 
 class Function:
-    def forward(self, *args: Any, **kwargs: Any) -> NDArray[np.floating] | int | float:
+    def forward(self, *args: Any, **kwargs: Any) -> Tensor:
         raise NotImplementedError(f"forward not implemented for {type(self)}")
 
-    def backward(self, out_grad: "Tensor") -> "Tensor" | tuple["Tensor", ...]:
+    def backward(self, out_grad: "Tensor") -> Tensor | tuple[Tensor, ...]:
         raise NotImplementedError(f"backward not implemented for {type(self)}")
 
-    def __call__(self, *args: Any, **kwargs: Any) -> NDArray[np.floating] | int | float:
+    def __call__(self, *args: Any, **kwargs: Any) -> Tensor:
         self.inputs = args
         return self.forward(*args, **kwargs)
 
@@ -647,7 +647,7 @@ def reduce_op(x: Tensor, dim, keepdim, op, initial, name=None) -> Tensor:
 
 # mypy: disable-error-code="override"
 class Add(Function):
-    def forward(self, x: "Tensor", y: int | float | "Tensor") -> "Tensor":
+    def forward(self, x: "Tensor", y: int | float | Tensor) -> Tensor:
         dprint(
             f"Add.forward: x.shape={x.shape}, y.shape={y.shape if isinstance(y, Tensor) else 'scalar'}"
         )
@@ -659,7 +659,7 @@ class Add(Function):
 
 
 class Neg(Function):
-    def forward(self, x: "Tensor") -> NDArray[np.floating] | int | float:
+    def forward(self, x: "Tensor") -> Tensor:
         dprint("Neg.forward {x.shape=", x.shape, "}")
         return unary_op(x, lambda a: -a, "Neg")
 
@@ -669,7 +669,7 @@ class Neg(Function):
 
 
 class Mul(Function):
-    def forward(self, x: "Tensor", y: int | float | "Tensor") -> NDArray[np.floating]:
+    def forward(self, x: "Tensor", y: int | float | "Tensor") -> Tensor:
         dprint(
             f"Mul.forward: x.shape={x.shape}, y.shape={y.shape if isinstance(y, Tensor) else 'scalar'}"
         )
@@ -687,7 +687,7 @@ class Mul(Function):
 
 
 class Matmul(Function):
-    def forward(self, x: "Tensor", y: "Tensor") -> NDArray[np.floating]:
+    def forward(self, x: "Tensor", y: "Tensor") -> Tensor:
         # x (2, 3)
         # y (3, 4)
         # out (2, 4)
@@ -705,7 +705,7 @@ class Matmul(Function):
 
 
 class Pow(Function):
-    def forward(self, x: "Tensor", n: int | float) -> NDArray[np.floating]:
+    def forward(self, x: "Tensor", n: int | float) -> Tensor:
         dprint(f"Pow.forward x.shape={x.shape}, n={n}")
         if n == 0:
             return Tensor.ones_like(x)
@@ -727,7 +727,7 @@ class Pow(Function):
 class Sum(Function):
     def forward(
         self, x: "Tensor", dim: Optional[int], keepdim: bool
-    ) -> NDArray[np.floating] | int | float:
+    ) -> Tensor:
         dprint(f"Sum.forward: x.shape={x.shape}, dim={dim}, keepdim={keepdim}")
         return reduce_op(x, dim, keepdim, lambda a, b: a + b, 0, "Sum")
 
@@ -754,7 +754,7 @@ class Sum(Function):
 
 
 class Unsqueeze(Function):
-    def forward(self, x: "Tensor", dim: int) -> NDArray[np.floating]:
+    def forward(self, x: "Tensor", dim: int) -> Tensor:
         return np.expand_dims(x.npdata, dim)
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
@@ -763,7 +763,7 @@ class Unsqueeze(Function):
 
 
 class Transpose(Function):
-    def forward(self, x: "Tensor") -> NDArray[np.floating]:
+    def forward(self, x: "Tensor") -> Tensor:
         return x.npdata.transpose()
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
@@ -771,7 +771,7 @@ class Transpose(Function):
 
 
 class ReLU(Function):
-    def forward(self, x: "Tensor") -> NDArray[np.floating]:
+    def forward(self, x: "Tensor") -> Tensor:
         out = x.npdata.copy()
         out[out < 0] = 0
         return out
@@ -784,7 +784,7 @@ class ReLU(Function):
 
 
 class LogN(Function):
-    def forward(self, x: "Tensor") -> NDArray[np.floating]:
+    def forward(self, x: "Tensor") -> Tensor:
         dprint(f"LogN.forward: x.shape={x.shape}")
         return unary_op(x, lambda a: math.log(a) if a > 0 else math.nan, "LogN")
 
@@ -796,7 +796,7 @@ class LogN(Function):
 
 
 class Exponential(Function):
-    def forward(self, x: "Tensor") -> NDArray[np.floating]:
+    def forward(self, x: "Tensor") -> Tensor:
         dprint(f"Exponential.forward: x.shape={x.shape}")
         self.out = unary_op(x, lambda a: math.exp(a), "Exponential")
         return self.out
@@ -811,7 +811,7 @@ class Exponential(Function):
 
 
 class Cosine(Function):
-    def forward(self, x: "Tensor") -> NDArray[np.floating]:
+    def forward(self, x: "Tensor") -> Tensor:
         dprint(f"Cosine.forward: x.shape={x.shape}")
         return unary_op(x, lambda a: math.cos(a), "Cosine")
 
@@ -823,7 +823,7 @@ class Cosine(Function):
 
 
 class Conv2D(Function):
-    def forward(self, x: "Tensor", filters: "Tensor") -> NDArray[np.floating]:
+    def forward(self, x: "Tensor", filters: "Tensor") -> Tensor:
         # https://docs.pytorch.org/docs/stable/generated/torch.nn.Conv2d.html
         out_channels, in_channels, kernel_size, kernel_size = filters.shape
         N, cin, inH, inW = x.shape
