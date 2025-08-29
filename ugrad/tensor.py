@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import array
 import math
+import random
 import time
 import os
 from functools import reduce
@@ -23,9 +24,9 @@ duration_realize = 0
 
 def calculate_gain(nonlinearity: str, a: float = 0.0) -> float:
     if nonlinearity == "relu":
-        return np.sqrt(2.0)
+        return math.sqrt(2.0)
     elif nonlinearity == "leaky_relu":
-        return np.sqrt(2.0 / (1 + a**2))
+        return math.sqrt(2.0 / (1 + a**2))
     elif nonlinearity == "tanh":
         return 5.0 / 3.0
     elif nonlinearity == "sigmoid":
@@ -69,6 +70,7 @@ class Tensor:
                 else np.ascontiguousarray(npdata).data
             )
             # Ensure the memoryview is 1D
+            dprint("data:", data, "mv.shape:", mv.shape, "mv.format:", mv.format)
             self.rawdata = mv.cast("B").cast(mv.format)
             self.st = st if st is not None else ShapeTracker.create(npdata.shape)
         self.f = f
@@ -246,8 +248,21 @@ class Tensor:
         return self.npdata
 
     @staticmethod
+    def empty(*shape: int | tuple[int]) -> "Tensor":
+        if len(shape) == 1 and isinstance(shape[0], tuple):
+            shape = shape[0]
+        data = bytearray(prod(shape) * 8)
+        out = Tensor(memoryview(data).cast("d"), st=ShapeTracker.create(shape))
+        return out
+
+    @staticmethod
     def zeros(*shape: int | tuple[int]) -> "Tensor":
-        return Tensor(np.zeros(*shape))
+        if len(shape) == 1 and isinstance(shape[0], tuple):
+            shape = shape[0]
+        return Tensor(
+            memoryview(array.array("d", (0.0 for _ in range(prod(shape))))),
+            st=ShapeTracker.create(shape),
+        )
 
     @staticmethod
     def zeros_like(a: "Tensor") -> "Tensor":
@@ -256,7 +271,12 @@ class Tensor:
     # Random samples from a uniform distribution over the interval [0, 1)
     @staticmethod
     def rand(*shape: int, **kwargs) -> "Tensor":
-        return Tensor(np.random.rand(*shape), **kwargs)
+        if len(shape) == 1 and isinstance(shape[0], tuple):
+            shape = shape[0]
+        return Tensor(
+            memoryview(array.array("d", (random.random() for _ in range(prod(shape))))),
+            st=ShapeTracker.create(shape),
+        )
 
     @staticmethod
     def randn(*shape: int, **kwargs) -> "Tensor":
@@ -348,7 +368,7 @@ class Tensor:
             receptive_field_size = prod(shape[2:])
             fan_in *= receptive_field_size
         gain = calculate_gain(nonlinearity, a)
-        a = gain * np.sqrt(3 / fan_in)
+        a = gain * math.sqrt(3 / fan_in)
         return Tensor.uniform(*shape, low=-a, high=a, **kwargs)
 
     @staticmethod
@@ -364,7 +384,7 @@ class Tensor:
             receptive_field_size = prod(shape[2:])
             fan_in *= receptive_field_size
         gain = calculate_gain(nonlinearity, a)
-        std = gain / np.sqrt(fan_in)  # Normal distribution std
+        std = gain / math.sqrt(fan_in)  # Normal distribution std
         return Tensor.normal(*shape, mean=0.0, std=std, **kwargs)
 
     def matmul(self, other: Self) -> "Tensor":
@@ -583,7 +603,7 @@ def reduce_op(x: Tensor, dim, keepdim, op, initial, name=None) -> Tensor:
         if keepdim:
             shape = (1,) * x.ndim
         # Reduce all dimensions
-        out = Tensor(np.empty(shape, dtype=x.dtype))
+        out = Tensor.empty(shape)
         cached_res = None
 
         def f(flat_index):
@@ -600,7 +620,7 @@ def reduce_op(x: Tensor, dim, keepdim, op, initial, name=None) -> Tensor:
             shape[dim] = 1
         else:
             shape.pop(dim)
-        out = Tensor(np.empty(tuple(shape), dtype=x.dtype))
+        out = Tensor.empty(tuple(shape))
         cached_res = {}
 
         def f(flat_index):
@@ -713,7 +733,7 @@ class Sum(Function):
         dprint(
             f"Sum.backward: x.shape={x.shape}, dim={dim}, keepdim={keepdim}, out_grad.shape={out_grad.shape}"
         )
-        out = Tensor(np.zeros_like(x.npdata))
+        out = Tensor.zeros_like(x)
         dprint(f"out = {out}, out_grad = {out_grad}")
         if dim is not None:
             if not keepdim:
@@ -775,7 +795,7 @@ class LogN(Function):
 class Exponential(Function):
     def forward(self, x: "Tensor") -> NDArray[np.floating]:
         dprint(f"Exponential.forward: x.shape={x.shape}")
-        self.out = np.exp(x.npdata)
+        self.out = unary_op(x, lambda a: math.exp(a), "Exponential")
         return self.out
 
     def backward(self, out_grad: "Tensor") -> "Tensor":
@@ -784,7 +804,7 @@ class Exponential(Function):
         )
         # y = exp(x)
         # y' = exp(x)
-        return Tensor(out_grad.npdata * self.out)
+        return out_grad * self.out
 
 
 class Cosine(Function):
