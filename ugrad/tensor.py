@@ -738,7 +738,7 @@ class Pow(Function):
         dprint(
             f"Pow.backward x.shape={x.shape}, n={n}, out_grad.shape={out_grad.shape}"
         )
-        x_grad = Tensor((n * (x.npdata ** (n - 1))) * out_grad.npdata)
+        x_grad = out_grad * n * (x.detach() ** (n - 1))
         return x_grad
 
 
